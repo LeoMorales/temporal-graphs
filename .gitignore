@@ -15,3 +15,7 @@ output/img*
 
 # test crudos:
 *_raw*
+
+
+# temp:
+data/.~*

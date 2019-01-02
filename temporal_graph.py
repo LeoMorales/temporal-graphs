@@ -7,6 +7,7 @@ import functools
 import time
 import datetime
 import pandas as pd
+import re
 
 TIPOS_FECHAS = ["<class 'datetime.datetime'>",
                "<class 'pandas._libs.tslibs.timestamps.Timestamp'>"]  # Porque timestamp pelado me parecia confuso
@@ -178,6 +179,21 @@ class TemporalGraph:
     def get_graph(self):
         return self._graph
     
+    def __ordena_letras_nodos(self, a, b):
+        ''' Sirve para ordenar los nodos del grafo por la parte
+            alfabética de la etiqueta de los nodo.
+            El orden es por tamaño y a igual tamaño, alfabeticamente
+
+            Returns:
+                -1 si a --> a >= b
+                1  si b --> b < a
+    
+        '''
+        if len(a) == len(b):
+            return -1 if a <= b else 1
+        else:
+            return 1 if (len(a) > len(b)) else -1
+    
     def _temporal_graph_positions(self):
         ''' Dame los nodos que te devuelvo sus posiciones en un temporal graph
             Returns:
@@ -196,11 +212,18 @@ class TemporalGraph:
         xbase = 0.0
         ybase = 0.0
         # Armar una grilla de columnas por los labels letras:
-        all_letters = sorted(list(set( [ node[0] for node in self._graph.nodes()] )))
+        exp = re.compile(r"(?P<letra>[a-zA-Z]+)(?P<numero>[0-9]+)")
+        all_letters = sorted(list(set( 
+            [ exp.match(node).groupdict().get('letra')
+                for node
+                in self._graph.nodes()] )),
+            key=functools.cmp_to_key(self.__ordena_letras_nodos))
         positions = {}
         for node in self._graph.nodes():
-            ypos = ybase - all_letters.index(node[0])
-            xpos = xbase + float(node[1:])
+            ypos = ybase - all_letters.index(
+                exp.match(node).groupdict().get('letra'))
+            xpos = xbase + float(
+                exp.match(node).groupdict().get('numero'))
             positions[node] = np.array((xpos, ypos))
         return positions
 
