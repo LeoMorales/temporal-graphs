@@ -1,0 +1,17 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+
+# Notebook Checkpoints
+.ipynb_checkpoints/
+
+
+# data:
+data/test__*
+
+# output:
+output/img*
+
+# test crudos:
+*_raw*
