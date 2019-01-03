@@ -8,6 +8,8 @@ import time
 import datetime
 import pandas as pd
 import re
+from itertools import takewhile
+
 
 TIPOS_FECHAS = ["<class 'datetime.datetime'>",
                "<class 'pandas._libs.tslibs.timestamps.Timestamp'>"]  # Porque timestamp pelado me parecia confuso
@@ -18,8 +20,12 @@ PALETA_MCDONALDS = {
     'temp_links_color': '#23512f',
     'label_color': '#23512f'
 }
+
+EXP_NODO = re.compile(r"(?P<nodo>[a-zA-Z]+)(?P<posicion>[0-9]+)")
+
+
 class TemporalGraph:
-    ''' Grafo temporal
+    '''Grafo temporal
         
         _times (list): Los _times nos sirven para manejar las
             columnas (visual) de tiempos.
@@ -59,8 +65,8 @@ class TemporalGraph:
         self._step = 0
         
     def _get_node_number(self, tiempo, silent_fail=True):
-        ''' Retorna el numero de columna a la que corresponde
-            el tiempo recibido (visualmente).
+        '''Retorna el numero de columna a la que corresponde
+        el tiempo recibido (visualmente).
         '''
         try:
             return self._times.index(tiempo) +1
@@ -73,31 +79,31 @@ class TemporalGraph:
                 raise Exception(exception_mes)  
     
     def _get_representation(self, node_name, tiempo):
-        ''' Un nodo 'a' en un grafo sera desagregado y representado
-            como 'aX' donde X es el lugar en el que se ubica _tiempo_
-            en la lista de todos los tiempos ordenados
-            
-            Args:
-                node_name (str): Nombre del nodo en el grafo
-                    estatico. Por ej: 'a', 'x', etc.
-                    TODO: Poder recibir labels mas compuestos
-                tiempo (datetime.datetime): tiempo en la
-                    que participa el nodo.
-            
-            Return:
-                str: En donde el node_name está concatenado
-                    con el numero que representa la ubicación
-                    del tiempo en la lista de tiempos ordenados
-                    ascendentemente.
+        '''Un nodo 'a' en un grafo sera desagregado y representado
+        como 'aX' donde X es el lugar en el que se ubica _tiempo_
+        en la lista de todos los tiempos ordenados
+        
+        Args:
+            node_name (str): Nombre del nodo en el grafo
+                estatico. Por ej: 'a', 'x', etc.
+                TODO: Poder recibir labels mas compuestos
+            tiempo (datetime.datetime): tiempo en la
+                que participa el nodo.
+        
+        Return:
+            str: En donde el node_name está concatenado
+                con el numero que representa la ubicación
+                del tiempo en la lista de tiempos ordenados
+                ascendentemente.
         '''
         return '{}{}'.format(node_name.strip(), self._get_node_number(tiempo))
     
     def _update_last_appearances(self, nodeA, nodeB, time):
-        ''' Guarda la ultima aparicion del nodo (temporalmente hablando)
-            en la estructura de ultimas apariciones.
-            
-            TODO: Analizar si aporta algo el guardar todas las apariciones
-            de un nodo en una lista...
+        '''Guarda la ultima aparicion del nodo (temporalmente hablando)
+        en la estructura de ultimas apariciones.
+        
+        TODO: Analizar si aporta algo el guardar todas las apariciones
+        de un nodo en una lista...
         '''
         last_appearance = self._last_node_appearance.get(nodeA, None)
         if not last_appearance or (time > last_appearance):
@@ -108,27 +114,27 @@ class TemporalGraph:
             self._last_node_appearance[nodeB] = time
         
     def create_link(self, sender, receiver, time):
-        ''' Debemos crear un link entre los nodos recibidos y ademas
-            crear un link con linea punteada a la aparición anterior
-            de la fila del nodo correspondiente.
+        '''Debemos crear un link entre los nodos recibidos y ademas
+        crear un link con linea punteada a la aparición anterior
+        de la fila del nodo correspondiente.
+        
+        Args:
+            sender (str): Nodo (estatico) desde el cual se comienza
+                la interacción.
+            receiver (str): Nodo (estatico) desde el cual se recibe
+                la interacción.
+            time (datetime.datetime): Tiempo en el que se produce
+                la interacción.
+        
+        Precondicion:
+            sender != receiver
+        
+        Return:
+            None
             
-            Args:
-                sender (str): Nodo (estatico) desde el cual se comienza
-                    la interacción.
-                receiver (str): Nodo (estatico) desde el cual se recibe
-                    la interacción.
-                time (datetime.datetime): Tiempo en el que se produce
-                    la interacción.
-            
-            Precondicion:
-                sender != receiver
-            
-            Return:
-                None
-                
-            Raises:
-                Exception: El ``time`` debe ser un datetime.datetime
-                    de python.
+        Raises:
+            Exception: El ``time`` debe ser un datetime.datetime
+                de python.
         '''
         sender = sender.strip()
         receiver = receiver.strip()
@@ -177,29 +183,53 @@ class TemporalGraph:
         self._update_last_appearances(sender, receiver, time)
 
     def get_graph(self):
+        ''' Retorna el grafo de networkx '''
         return self._graph
     
     def __ordena_letras_nodos(self, a, b):
-        ''' Sirve para ordenar los nodos del grafo por la parte
-            alfabética de la etiqueta de los nodo.
-            El orden es por tamaño y a igual tamaño, alfabeticamente
+        '''Sirve para ordenar los nodos del grafo por la parte
+        alfabética de la etiqueta de los nodo.
+        El orden es por tamaño y a igual tamaño, alfabeticamente
 
-            Returns:
+        Returns:
+            int:
                 -1 si a --> a >= b
                 1  si b --> b < a
-    
         '''
         if len(a) == len(b):
             return -1 if a <= b else 1
         else:
             return 1 if (len(a) > len(b)) else -1
     
+    def _get_base_node(self, node):
+        '''Retorna el nodo base para la instancia de nodo recibida:
+        Por ejemplo: Para "ab34" (str) retorna "ab" (str)
+        '''
+        return EXP_NODO.match(node).groupdict().get('nodo')
+
+    def _substract_position(self, node):
+        '''Retorna la posicion en la que se ubica la instancia de nodo recibida:
+        Por ejemplo: Para "ab34" retorna 34
+
+        Returns:
+            int: el tiempo para la instancia de nodo indicada.
+        '''
+        return int(
+            EXP_NODO.match(node).groupdict().get('posicion'))
+    
     def _temporal_graph_positions(self):
-        ''' Dame los nodos que te devuelvo sus posiciones en un temporal graph
-            Returns:
-                dict con las posiciones de cada nodo según el tiempo
-                    en el que participen. Cada valor del dict es un
-                    numpy.array con coords x e y por cada label del nodo
+        '''En base a los nodos del grafo, devuelve sus posiciones en un temporal
+        graph.
+        Calcular las posiciones de los nodos es de relevancia en la visualizacion
+        del grafo temporal:
+            Instancias de los nodos en posicion horizontal.
+            Interacciones entre nodos en posicion vertical.
+
+        Returns:
+            dict: con las posiciones de cada nodo según el tiempo
+                en el que participen. Cada valor del dict es un
+                numpy.array con coords x e y por cada label del nodo
+                
                 {
                     'a1': [0, 0],
                     'a2': [1, 0],
@@ -212,33 +242,33 @@ class TemporalGraph:
         xbase = 0.0
         ybase = 0.0
         # Armar una grilla de columnas por los labels letras:
-        exp = re.compile(r"(?P<letra>[a-zA-Z]+)(?P<numero>[0-9]+)")
         all_letters = sorted(list(set( 
-            [ exp.match(node).groupdict().get('letra')
+            [ self._get_base_node(node)
                 for node
                 in self._graph.nodes()] )),
             key=functools.cmp_to_key(self.__ordena_letras_nodos))
         positions = {}
         for node in self._graph.nodes():
-            ypos = ybase - all_letters.index(
-                exp.match(node).groupdict().get('letra'))
+            ypos = ybase - all_letters.index(self._get_base_node(node))
             xpos = xbase + float(
-                exp.match(node).groupdict().get('numero'))
+                self._substract_position(node))
             positions[node] = np.array((xpos, ypos))
         return positions
 
     def _draw_interconnections(self, links, ax, sg=None, link_color='k'):
-        ''' Dibuja todos los enlaces recibidos con una forma curva
-            Args:
-                links (list): Lista de tuplas con los labels
-                    de los nodos origen y destino
-                ax (matplotlib.axes.Axes)
+        '''Dibuja todos los enlaces recibidos con una forma curva
 
-            Return:
-                El ultimo enlace.
-            
-            --> Codigo base de la funcion
-                --> https://groups.google.com/forum/#!topic/networkx-discuss/FwYk0ixLDuY
+        Args:
+            links (list): Lista de tuplas con los labels
+                de los nodos origen y destino
+            ax (matplotlib.axes.Axes): Ejes sobre los cuales
+                se dibujan los enlaces.
+
+        Return:
+            El ultimo enlace.
+        
+        --> Codigo base de la funcion
+            --> https://groups.google.com/forum/#!topic/networkx-discuss/FwYk0ixLDuY
 
         '''
         grid_positions = self._temporal_graph_positions()
@@ -268,24 +298,23 @@ class TemporalGraph:
         return
 
     def plot(self, only_save=False, output_folder='output', paleta=PALETA_MCDONALDS):
-        ''' Dibuja el grafo temporal
+        '''Dibuja el grafo temporal
 
-            Args:
-                only_save (bool): Indica si se deben guardar un png del grafo en
-                    lugar de mostrarlo una vez terminado por pantalla (True).
-                    TODO: Esto está pensado para generar el gif de forma manual.
-                        Será posible generarlo de forma automática?
+        Args:
+            only_save (bool): Indica si se deben guardar un png del grafo en
+                lugar de mostrarlo una vez terminado por pantalla (True).
+                TODO: Esto está pensado para generar el gif de forma manual.
+                    Será posible generarlo de forma automática?
 
-                output_folder (str): Carpeta en la cual se van a guardar las
-                    imagenes generadas. Por defecto, intenta guardarlas
-                    en una carpeta 'output'
+            output_folder (str): Carpeta en la cual se van a guardar las
+                imagenes generadas. Por defecto, intenta guardarlas
+                en una carpeta 'output'
 
-                paleta (dict): Paleta de colores para el grafo.
-                    Debe contener las claves 'nodes_color', 'links_color',
-                    'temp_links_color' para indicar los colores de los nodos,
-                    de los links entre nodos distintos y los links entre nodos
-                    del mismo nodo base (a1, a2, a3, etc --> a) respectivamente.
-
+            paleta (dict): Paleta de colores para el grafo.
+                Debe contener las claves 'nodes_color', 'links_color',
+                'temp_links_color' para indicar los colores de los nodos,
+                de los links entre nodos distintos y los links entre nodos
+                del mismo nodo base (a1, a2, a3, etc --> a) respectivamente.
 
         '''
         # setups:
@@ -320,8 +349,10 @@ class TemporalGraph:
         # Dibujar conecciones entre nodos 'desagregados' (participaciones temporales del nodo):
         nx.draw_networkx_edges(self._graph, pos, edgelist=edashed,
                                width=line_width, alpha=0.25,
-                               edge_color=dashed_edges_color, style='dashed',
-                               arrows=False, ax=ax)
+                               edge_color=dashed_edges_color,
+                               ax=ax,
+                               style='dashed',
+                               arrows=False)
 
         # labels
         nx.draw_networkx_labels(
@@ -345,20 +376,25 @@ class TemporalGraph:
                      column_time,
                      verbose=True,
                      save_steps_images=False):
-        ''' Crea enlaces en el grafo temporal según la data recibida.
+        '''Crea enlaces en el grafo temporal según la data recibida.
             
-            Args:
-                data_row (pandas.core.series.Series): Informacion de el o los enlaces
-                column_sender (str): Indice en la serie que corresponde al emisor. Puede
-                    contener múltiples emisores separados por coma.
-                column_destination (str): Indice en la serie que corresponde al receptor.
-                    Puede contener múltiples receptores separados por coma.
-                column_time (str): Indice en la serie que corresponde al tiempo en el 
-                    que se produce la interacción.
-                verbose (bool): Indica si se imprime un mensajito por cada enlace creado,
-                save_steps_images (bool): Indica si se plotea todo el grafo cada vez
-                    que se crea un nuevo enlace. 
-            
+        Args:
+            data_row (pandas.core.series.Series): Informacion de el o los enlaces
+
+            column_sender (str): Indice en la serie que corresponde al emisor. Puede
+                contener múltiples emisores separados por coma.
+
+            column_destination (str): Indice en la serie que corresponde al receptor.
+                Puede contener múltiples receptores separados por coma.
+
+            column_time (str): Indice en la serie que corresponde al tiempo en el 
+                que se produce la interacción.
+
+            verbose (bool): Indica si se imprime un mensajito por cada enlace creado,
+
+            save_steps_images (bool): Indica si se plotea todo el grafo cada vez
+                que se crea un nuevo enlace. 
+        
         '''
         for origin in data_row[column_sender].split(','):
             origin = origin.strip()
@@ -382,26 +418,27 @@ class TemporalGraph:
                             col_destination='recipient',
                             col_time='time',
                             save_images=False, verbose=True):
-        ''' Crea links en base al dataframe con la data correspondiente.
-            Args:
+        '''Crea links en base al dataframe con la data correspondiente.
+
+        Args:
+        
+            data (pandas.Dataframe): 
+                | sender | recipient | time
+                |  str   |  str      | datetime.datetime
+                --------------------------------------------------
+                | A      |   B       | 2018-12-19 14:34:14.736048
+                | A      |   C, E    | 2018-12-19 14:34:15.736424
+                --------------------------------------------------
             
-                data (pandas.Dataframe): 
-                    | sender | recipient | time
-                    |  str   |  str      | datetime.datetime
-                    --------------------------------------------------
-                    | A      |   B       | 2018-12-19 14:34:14.736048
-                    | A      |   C, E    | 2018-12-19 14:34:15.736424
-                    --------------------------------------------------
+            column_sender (str): Columna que corresponde al emisor.
+            
+            column_destination (str): Columna que corresponde al receptor.
+            
+            column_time (str): Columna que corresponde al tiempo en el 
+                que se produce la interacción.
                 
-                column_sender (str): Columna que corresponde al emisor.
-                
-                column_destination (str): Columna que corresponde al receptor.
-                
-                column_time (str): Columna que corresponde al tiempo en el 
-                    que se produce la interacción.
-                    
-                save_images (bool): Indica si se tiene que guardar el grafo
-                    cada vez que se agrega un nuevo enlace.
+            save_images (bool): Indica si se tiene que guardar el grafo
+                cada vez que se agrega un nuevo enlace.
         '''
         if not {col_sender, col_destination, col_time}.issubset(set(data.columns.values)):
             exception_msg = '''
@@ -420,8 +457,174 @@ class TemporalGraph:
                                        verbose=verbose)
         data.apply(build_link, axis=1)
 
+    def _get_node_instances(self, node_base, from_time=None, to_time=None):
+        '''Devuelve las instancias en el tiempo para el
+        nodo base recibido.
+        '''
+        instances = filter(
+            lambda n: self._get_base_node(n) == node_base,
+            self._graph.nodes()
+        )
+        
+        if from_time:
+            instances = filter(
+                lambda n: self._substract_position(n) >= from_time,
+                instances)
+        if to_time:
+            instances = filter(
+                lambda n: self._substract_position(n) <= to_time,
+                instances)
+
+        return list(instances)
+
+    def _get_node_participations(self, node):
+        '''Retorna los tiempos en los que el nodo recibido
+        tiene una instancia.
+
+        Args:
+            node (str): Nodo. Por ejemplo: 'a', 'b', 'c', etc.
+
+        Returns:
+            list of int: Tiempos de las instancias
+                del nodo recibido.
+        ''' 
+        participations = [ 
+            self._substract_position(node_i) 
+            for node_i
+            in self._get_node_instances(node)
+        ]
+        return sorted(participations)
+        
+    def _closer_node(self, node_base, time=None):
+        '''Devuelve la instancia del nodo en el tiempo especificado
+        si existe, sino el mas próximo a partir del tiempo
+        recibido.
+
+        Args:
+            node_base (str): Nodo base del que se desea
+                encontrar la instancia.
+
+            time (int): Tiempo a partir del cual se
+                desea encontrar la primer instancia para
+                el nodo base.
+
+        Raises:
+            Exception si a partir del valor de tiempo recibido
+            no es posible encontrar una instancia del nodo base.
+        '''
+        searched_node = '{}{}'.format(node_base, time)
+        if self._graph.has_node(searched_node):
+            return searched_node
+
+        # El nodo no tiene una instancia en el tiempo recibido,
+        # obtenemos todos los tiempos en donde exiten instancias:  
+        participations = self._get_node_participations(node_base)
+        
+        # si no se especificó el tiempo, devolver la primera aparición:
+        if not time:
+            return '{}{}'.format(node_base, participations[0])
+            
+        # caso contrario, devolver la mas próxima en el tiempo:
+        for n in participations:
+            if n > time:
+                return '{}{}'.format(node_base, n)
+        else:
+            raise Exception(
+                'No se puede encontrar una instancia del nodo "{}" posterior al tiempo {} recibido'.format(
+                    node_base, time))
+
+    def _remote_node(self, node_base, time_max=None):
+        '''Retorna la instancia del nodo recibido en el tiempo
+        recibido, o la mas próxima anterior. Si no se especifica
+        el tiempo max, devuelve el último nodo instancia que se
+        encuentre para el node_base.
+
+        Args:
+            node_base (str): Nodo
+            
+            time_max (int): El tiempo hasta el cual se busca
+                la instancia del nodo.
+        '''
+        participations = self._get_node_participations(node_base)
+        if not time_max:
+            return '{}{}'.format(node_base, participations[-1])
+
+        if time_max in participations:
+            return '{}{}'.format(node_base, time_max)
+        else:
+            return '{}{}'.format(
+                node_base,
+                list(takewhile(lambda v: v < time_max, participations))[-1]
+            )
+
+
+    def proximidad_temporal(self, node_from, node_to, time_from=None, time_to=None):
+        if time_from and time_to:
+            return nx.algorithms.shortest_path(
+                self._graph,
+                self._closer_node(node_from, time_from),
+                self._remote_node(node_to, time_to))
+        
+        path = []
+        if time_from and not time_to:
+            # Buscar el primer camino que alcance a partir de time_from:
+            origin = self._closer_node(node_from, time_from)
+            base_time = self._substract_position(origin) -1
+            while (not path) and (base_time <= max(self._get_node_participations(node_to))):
+                base_time += 1
+                if base_time not in self._get_node_participations(node_to):
+                    continue
+                destination = self._closer_node(
+                    node_to, base_time)
+                try:
+                    path = nx.algorithms.shortest_path(
+                        self._graph,
+                        origin,
+                        destination)
+                except nx.NetworkXNoPath as e:
+                    return []
+        if time_to and not time_from:
+            destination = self._closer_node(node_to, time_to)
+            base_time = self._substract_position(destination) +1
+            while (not path) and (base_time >= min(self._get_node_participations(node_from))):
+                base_time -= 1
+                if base_time not in self._get_node_participations(node_from):
+                    continue
+                origin = self._closer_node(node_from, base_time)
+                try:
+                    path = nx.algorithms.shortest_path(
+                        self._graph,
+                        origin,
+                        destination)
+                except nx.NetworkXNoPath as e:
+                    continue
+
+        else:
+            paths = []
+            for origin_instance in self._get_node_instances(node_from):
+                origin_time = self._substract_position(origin_instance)
+                for destination_instance in self._get_node_instances(node_to, from_time=origin_time):
+                    if nx.algorithms.has_path(self._graph, origin_instance, destination_instance):
+                        # Si hay un camino entre las instancias:
+                        # guardar
+                        paths.append(nx.algorithms.shortest_path(
+                            self._graph,
+                            origin_instance,
+                            destination_instance))
+                        # cortar:
+                        break
+            path = min(paths, key=lambda path: len(path)) if paths else []
+
+
+        return path
 
 def __create_alphabet(num):
+    '''Crea y retorna el alfabeto para representar con letras
+    tanta cantidad de elementos como lo indique ``num``
+    Retorna la lista dada vuelta para poder ir usando .pop()
+    y mantener el orden alfabético.
+   
+    '''
     alphabet = []
     base = ''
     counter = 0
@@ -434,26 +637,26 @@ def __create_alphabet(num):
     #return alphabet
     
 def limpiar_data(df, col_sender, col_recipient, col_time, formato_fecha='%d/%m/%Y'):
-    ''' Construye un dataframe listo-para-ser-entrada-del-grafo-temporal, a partir
-        de un dataframe existente que tenga columnas con tipos que coincidan con los
-        tipos del dataframe de entrada --> (str, str, fecha)
-        
-        Debemos indicar cual de las columnas del dataframe de entrada
-        debe ser tratada como sender, recipient y time, así hacemos las
-        transformaciones correspondientes
-        
-        Args:
-            col_sender (str): Cual de las columnas del dataframe
-                especifican el emisor del mensaje
-                
-            col_recipient (str): Cual de las columnas del dataframe
-                especifica el receptor de cada mensaje.
+    '''Construye un dataframe listo-para-ser-entrada-del-grafo-temporal, a partir
+    de un dataframe existente que tenga columnas con tipos que coincidan con los
+    tipos del dataframe de entrada --> (str, str, fecha)
+    
+    Debemos indicar cual de las columnas del dataframe de entrada
+    debe ser tratada como sender, recipient y time, así hacemos las
+    transformaciones correspondientes
+    
+    Args:
+        col_sender (str): Cual de las columnas del dataframe
+            especifican el emisor del mensaje
             
-            col_time (str): Cual de las columnas debe utilizarse
-                como fechas de tiempo en el que sucedió el evento.
-                Esta columna (generalmente luego de ser levantada
-                desde un csv) es de tipo str (object en pandas) y
-                tiene el formato dd/mm/YYYY.
+        col_recipient (str): Cual de las columnas del dataframe
+            especifica el receptor de cada mensaje.
+        
+        col_time (str): Cual de las columnas debe utilizarse
+            como fechas de tiempo en el que sucedió el evento.
+            Esta columna (generalmente luego de ser levantada
+            desde un csv) es de tipo str (object en pandas) y
+            tiene el formato dd/mm/YYYY.
 
     '''
     # Create alphabet list of lowercase letters
@@ -474,8 +677,3 @@ def limpiar_data(df, col_sender, col_recipient, col_time, formato_fecha='%d/%m/%
         'recipient': df[col_recipient].apply(lambda receptor: reemplazos[receptor]),
         'time': df[col_time].apply(lambda fecha: datetime.datetime.strptime(fecha, formato_fecha))
     })
-
-
-    
-    
-        
