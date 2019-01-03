@@ -559,6 +559,24 @@ class TemporalGraph:
 
 
     def proximidad_temporal(self, node_from, node_to, time_from=None, time_to=None):
+        '''Devuelve la proximidad temporal entre los nodos
+
+        Args:
+            node_from (str): Label del nodo (base) desde el cual se calcula 
+                la proximidad temporal. Por ej: 'A', 'B', etc.
+
+            node_to (str): Label del nodo (base) hasta el cual se calcula 
+                la proximidad temporal. Por ej: 'A', 'B', etc.
+
+            time_from (int): precondicion temporal (tiempo desde)
+
+            time_to (int): poscondicion temporal (tiempo hasta)
+
+        Returns:
+            list: Lista de los nodos que representan el camino mas corto
+                en cuanto a lo temporal.
+        '''
+
         if time_from and time_to:
             return nx.algorithms.shortest_path(
                 self._graph,
