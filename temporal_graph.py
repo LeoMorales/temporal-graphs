@@ -12,7 +12,8 @@ from itertools import takewhile
 
 
 TIPOS_FECHAS = ["<class 'datetime.datetime'>",
-               "<class 'pandas._libs.tslibs.timestamps.Timestamp'>"]  # Porque timestamp pelado me parecia confuso
+               "<class 'pandas._libs.tslibs.timestamps.Timestamp'>",
+               "<class 'numpy.datetime64'>"]  # Porque timestamp pelado me parecia confuso
 
 PALETA_MCDONALDS = {
     'nodes_color': '#ffce00',
@@ -21,7 +22,7 @@ PALETA_MCDONALDS = {
     'label_color': '#23512f'
 }
 
-EXP_NODO = re.compile(r"(?P<nodo>[a-zA-Z]+)(?P<posicion>[0-9]+)")
+EXP_NODO = re.compile(r"(?P<nodo>[a-zA-Z-_]+)(?P<posicion>[0-9]+)")
 
 
 class TemporalGraph:
@@ -64,18 +65,21 @@ class TemporalGraph:
         self._graph = nx.DiGraph()
         self._step = 0
         
-    def _get_node_number(self, tiempo, silent_fail=True):
+    def _get_node_number(self, time, silent_fail=True):
         '''Retorna el numero de columna a la que corresponde
         el tiempo recibido (visualmente).
+
+        Args:
+            time (int): Un tiempo.
         '''
         try:
-            return self._times.index(tiempo) +1
+            return self._times.index(time) +1
         except ValueError:
             if silent_fail:
                 return 0
             else:
                 exception_mes = '''El tiempo especificado ({})
-                    no corresponde a un tiempo disponible en el grafo'''.format(tiempo)
+                    no corresponde a un tiempo disponible en el grafo'''.format(time)
                 raise Exception(exception_mes)  
     
     def _get_representation(self, node_name, tiempo):
@@ -136,8 +140,14 @@ class TemporalGraph:
             Exception: El ``time`` debe ser un datetime.datetime
                 de python.
         '''
+        # limpiar sender y receiver:
         sender = sender.strip()
         receiver = receiver.strip()
+        sender = re.sub('\d', 'X', sender)
+        receiver = re.sub('\d', 'X', receiver)
+        sender = sender.replace('.', '_')
+        receiver = receiver.replace('.', '_')
+
         if str(type(time)) != "<class 'datetime.datetime'>":
             try:
                 time = datetime.datetime.strptime(str(time), '%d/%m/%Y')
@@ -145,8 +155,12 @@ class TemporalGraph:
                 raise Exception('El atributo time debe ser de tipo "datetime.datetime" o un tipo casteable a datetime')
         
         # Crear el link entre los nodos
-        self._graph.add_edge(self._get_representation(sender, time),
-                             self._get_representation(receiver, time),
+        ## Instancias:
+        instance_node_origin = self._get_representation(sender, time)
+        instance_node_target = self._get_representation(receiver, time)
+
+        self._graph.add_edge(instance_node_origin,
+                             instance_node_target,
                              weight=0.0)
         
         # Luego, si corresponde, crear los links de los nodos que recibimos
@@ -159,7 +173,7 @@ class TemporalGraph:
                 # hay un link directo
                 link_weight = (time - last_time_appearance).total_seconds()
                 self._graph.add_edge(self._get_representation(sender, last_time_appearance),
-                                     self._get_representation(sender, time),
+                                     instance_node_origin,
                                      weight=link_weight)
             elif time < last_time_appearance:
                 # debemos dividir el link que ya existía, porque
@@ -173,7 +187,7 @@ class TemporalGraph:
                 # hay un link directo
                 link_weight = (time - last_time_appearance).total_seconds()
                 self._graph.add_edge(self._get_representation(receiver, last_time_appearance),
-                                     self._get_representation(receiver, time),
+                                     instance_node_target,
                                      weight=link_weight)
             elif time < last_time_appearance:
                 # debemos dividir el link que ya existía, porque
@@ -181,6 +195,7 @@ class TemporalGraph:
                 print('reacomodar links horizontales receptor')
             
         self._update_last_appearances(sender, receiver, time)
+        return (sender, receiver, time, instance_node_origin)
 
     def get_graph(self):
         ''' Retorna el grafo de networkx '''
@@ -205,7 +220,12 @@ class TemporalGraph:
         '''Retorna el nodo base para la instancia de nodo recibida:
         Por ejemplo: Para "ab34" (str) retorna "ab" (str)
         '''
-        return EXP_NODO.match(node).groupdict().get('nodo')
+        try:
+            return EXP_NODO.match(node).groupdict().get('nodo')
+        except AttributeError as e:
+            # AttributeError: 'NoneType' object has no attribute 'groupdict'
+            raise Exception("AttributeError: 'NoneType' object has no attribute 'groupdict'\nNodo: {}".format(node))
+
 
     def _substract_position(self, node):
         '''Retorna la posicion en la que se ubica la instancia de nodo recibida:
@@ -407,9 +427,9 @@ class TemporalGraph:
                     time = data_row[column_time].to_pydatetime()
                 except:
                     raise Exception('El atributo no se puede convertir a datetime.datetime')
-                self.create_link(origin, destination, time)
+                origin, destination, time, instance_origin = self.create_link(origin, destination, time)
                 if verbose:
-                    print('Enlace: ', origin, destination, data_row[column_time])
+                    print('Enlace: ', origin, destination, data_row[column_time], instance_origin)
                 if save_steps_images:
                     self.plot(only_save=True)
     
@@ -495,10 +515,12 @@ class TemporalGraph:
         ]
         return sorted(participations)
         
-    def _closer_node(self, node_base, time=None):
+    def _get_first_instance_from_time(self, node_base, time=None):
         '''Devuelve la instancia del nodo en el tiempo especificado
         si existe, sino el mas próximo a partir del tiempo
         recibido.
+        Sino se especifica el tiempo, se devuelve la primera instancia
+        que se encuentra.
 
         Args:
             node_base (str): Nodo base del que se desea
@@ -533,10 +555,10 @@ class TemporalGraph:
                 'No se puede encontrar una instancia del nodo "{}" posterior al tiempo {} recibido'.format(
                     node_base, time))
 
-    def _remote_node(self, node_base, time_max=None):
+    def _get_last_instance_after_time(self, node_base, time_max=None):
         '''Retorna la instancia del nodo recibido en el tiempo
-        recibido, o la mas próxima anterior. Si no se especifica
-        el tiempo max, devuelve el último nodo instancia que se
+        recibido, o la mas próxima anterior (sería comenzando de derecha a izquierda).
+        Si no se especifica el tiempo max, devuelve el último nodo instancia que se
         encuentre para el node_base.
 
         Args:
@@ -558,7 +580,7 @@ class TemporalGraph:
             )
 
 
-    def proximidad_temporal(self, node_from, node_to, time_from=None, time_to=None):
+    def temporal_proximity_old(self, node_from, node_to, time_from=None, time_to=None):
         '''Devuelve la proximidad temporal entre los nodos
 
         Args:
@@ -580,19 +602,19 @@ class TemporalGraph:
         if time_from and time_to:
             return nx.algorithms.shortest_path(
                 self._graph,
-                self._closer_node(node_from, time_from),
-                self._remote_node(node_to, time_to))
+                self._get_first_instance_from_time(node_from, time_from),
+                self._get_last_instance_after_time(node_to, time_to))
         
         path = []
         if time_from and not time_to:
             # Buscar el primer camino que alcance a partir de time_from:
-            origin = self._closer_node(node_from, time_from)
+            origin = self._get_first_instance_from_time(node_from, time_from)
             base_time = self._substract_position(origin) -1
             while (not path) and (base_time <= max(self._get_node_participations(node_to))):
                 base_time += 1
                 if base_time not in self._get_node_participations(node_to):
                     continue
-                destination = self._closer_node(
+                destination = self._get_first_instance_from_time(
                     node_to, base_time)
                 try:
                     path = nx.algorithms.shortest_path(
@@ -602,13 +624,13 @@ class TemporalGraph:
                 except nx.NetworkXNoPath as e:
                     return []
         if time_to and not time_from:
-            destination = self._closer_node(node_to, time_to)
+            destination = self._get_first_instance_from_time(node_to, time_to)
             base_time = self._substract_position(destination) +1
             while (not path) and (base_time >= min(self._get_node_participations(node_from))):
                 base_time -= 1
                 if base_time not in self._get_node_participations(node_from):
                     continue
-                origin = self._closer_node(node_from, base_time)
+                origin = self._get_first_instance_from_time(node_from, base_time)
                 try:
                     path = nx.algorithms.shortest_path(
                         self._graph,
@@ -635,6 +657,260 @@ class TemporalGraph:
 
 
         return path
+
+    def temporal_proximity(self, node_from, node_to, time_from=None, time_to=None, verbose=False):
+        '''Devuelve la proximidad temporal entre los nodos
+
+        Args:
+            node_from (str): Label del nodo (base) desde el cual se calcula 
+                la proximidad temporal. Por ej: 'A', 'B', etc.
+
+            node_to (str): Label del nodo (base) hasta el cual se calcula 
+                la proximidad temporal. Por ej: 'A', 'B', etc.
+
+            time_from (int): precondicion temporal (tiempo desde)
+
+            time_to (int): poscondicion temporal (tiempo hasta)
+
+        Returns:
+            list: Lista de los nodos que representan el camino mas corto
+                en cuanto a lo temporal, desde node_from hasta node_to.
+        '''
+        self.__logging(
+            verbose,
+            'Temporal proximity from {} to {}\n'.format(
+                node_from,
+                node_to)
+            )
+        paths = []
+        if time_from or ((not time_from) and time_to):
+            # Si tenemos tiempo desde --> p(A,D,ti,null) o
+            # si tenemos solo tiempo hasta --> p(A,D,null,ti)
+            # el camino se calcula desde la 1ra instancia del nodo encontrada:
+            origin_instances = [self._get_first_instance_from_time(node_from, time_from)]
+            self.__logging(verbose,
+                '\tSearching from: {}'.format(origin_instances[0]))
+        else:
+            # En los otros dos casos: 
+            # p(A,D,ti,tj) y p(A,D,null,null)
+            # buscar desde todas las instancias del nodo from:
+            origin_instances = self._get_node_instances(node_from, from_time=time_from, to_time=time_to)
+            self.__logging(verbose,
+                '\tSearching from all origin node instances {}'.format(
+                    node_from))
+        
+        for origin_instance in origin_instances:
+            self.__logging(verbose,
+                '\tFrom: {}'.format(origin_instance))
+            origin_time = self._substract_position(origin_instance)
+            if not time_to:
+                destination_instances = self._get_node_instances(node_to, from_time=origin_time)
+            else:
+                try:
+                    destination_instances = [self._get_last_instance_after_time(node_to, time_to)]
+                except Exception as e:
+                    raise Exception('El nodo destino {} no tiene instancias instancias anteriores al tiempo {}'.format(
+                        node_to,
+                        time_to))
+            
+            for destination_instance in destination_instances:
+                self.__logging(verbose,
+                    '\tDestination: {}?'.format(destination_instance))
+                if nx.algorithms.has_path(self._graph, origin_instance, destination_instance):
+                    # Si hay un camino entre las instancias:
+                    # guardar
+                    path_found = nx.algorithms.shortest_path(
+                        self._graph,
+                        origin_instance,
+                        destination_instance)
+                    paths.append(path_found)
+                    self.__logging(verbose,
+                        '\t\tHave path, save: \n\t\t{}\n\t\tnext node instance destination...'.format(path_found))
+                    # cortar:
+                    break
+        path = min(paths, key=lambda path: self.weight(path)) if paths else []
+
+        return path
+
+
+    def weight(self, path):
+        if not path:
+            return 0
+        from_node = path[0]
+        acum = 0
+        for node in path[1:]:
+            acum += self._graph.get_edge_data(from_node, node).get('weight')
+            from_node = node
+        return acum
+
+    def _node_in_graph(self, node):
+        return node in self._last_node_appearance
+
+    def average_temporal_proximity(self, node_from, node_to, verbose=False):
+        '''ATP
+        '''
+        if not self._node_in_graph(node_from):
+            print('Node from not in graph')
+            return
+        if not self._node_in_graph(node_to):
+            print('Node to not in graph')
+            return
+
+        self.__logging(
+            verbose,
+            'Average temporal proximity from {} to {}\n'.format(
+                node_from,
+                node_to)
+            )
+
+        acum = 0.0
+        paths = []
+        instances_origin = self._get_node_instances(node_from)
+        self.__logging(verbose, '-- Iteration start --')
+        for origin_instance in instances_origin:
+            origin_time = self._substract_position(origin_instance)
+            temp_proximity = self.temporal_proximity(
+                node_from,
+                node_to,
+                time_from=origin_time,
+                verbose=verbose)
+            paths.append(temp_proximity)
+            if verbose:
+                print('In t:{}\n\tdistance from {} to {}\n\tpath: {}\n\n'.format(origin_time, node_from, node_to, temp_proximity))
+
+        self.__logging(verbose, '-- Iteration finished --')
+        # Eliminar paths vacios:
+        paths = list(filter(lambda path: len(path) != 0, paths))
+        # Obtener los pesos de los paths:
+        paths_weights = list(map(self.weight, paths))
+        try:
+            return sum(paths_weights) / len(paths_weights)
+        except ZeroDivisionError as e:
+            return None
+
+    def __logging(self, verbose_mode, msg):
+        if verbose_mode:
+            print(msg)
+
+    def _get_nodes(self):
+        '''Retorna los nodos del grafo (no las instancias)
+
+        Old way:
+            return sorted(list(set(
+                [
+                    self._get_base_node(node_i)
+                    for node_i
+                    in self._graph.nodes()
+                ])))
+            Evita recorrer todas las instancias del grafo, ordenando
+            las claves del diccionario de apariciones de nodos.
+        '''
+        return sorted(self._last_node_appearance)
+
+    def average_temporal_proximity_from_node(self, node):
+        '''Retorna las proximidades temporales promedio del nodo
+        hacia el resto de los nodos
+
+        Args:
+            node (str): Nodo desde el cual calcular las
+                proximidades temporales promedio.
+                Por ejemplo: 'A'
+
+        Returns:
+            dict: Diccionario con las proximidades temporales promedio 
+                desde el nodo recibido. Por ejemplo, para 'A' se 
+                puede devolver:
+                {
+                    'A': 0.0,
+                    'B': 561600.0,
+                    'C': 43200.0,
+                    'D': 144000.0,
+                    'E': 43200.0
+                }
+        '''
+        avg_tmp_proxs = {}
+        for node_y in self._get_nodes():
+            avg_tmp_proxs[node_y] = self.average_temporal_proximity(
+                node,
+                node_y)
+        return avg_tmp_proxs
+
+    def average_temporal_reach(self, node):
+        '''on average, how quickly does X reach the rest of the network
+        Lease: ```P out```
+
+        Args:
+            node (str): Nodo. Por ejemplo: 'A'.
+
+        Returns:
+            float, o None si desde el nodo no se alcanza ningun otro nodo.
+        '''
+        avg_tmp_proxs_from_node = self.average_temporal_proximity_from_node(node)
+        # eliminar valores nulos:
+        avg_tmp_proxs_from_node = list(filter(
+            lambda proximity: proximity is not None,
+            avg_tmp_proxs_from_node.values()))
+        try:
+            # restar 1 para no contar la prox temp promedio hacien el propio nodo:
+            return sum(avg_tmp_proxs_from_node) / (len(avg_tmp_proxs_from_node) -1)
+        except Exception as e:
+            return None
+
+    def average_temporal_proximity_to_node(self, node):
+        '''Retorna las proximidades temporales promedio del resto
+        de los nodos del grafo hacia el nodo recibido
+
+        Args:
+            node (str): Nodo hacia el cual calcular las
+                proximidades temporales promedio.
+                Por ejemplo: 'D'
+
+        Returns:
+            dict: Diccionario con las proximidades temporales promedio 
+                desde el nodo recibido. Por ejemplo, para 'D' se 
+                puede devolver:
+                {
+                    'A': 144000.0,
+                    'B': 374400.0,
+                    'C': None,
+                    'D': 0.0,
+                    'E': 86400.0
+                }
+        '''
+        avg_tmp_proxs = {}
+        for node_x in self._get_nodes():
+            avg_tmp_proxs[node_x] = self.average_temporal_proximity(
+                node_x,
+                node)
+        return avg_tmp_proxs
+
+    def average_temporal_reachability(self, node):
+        '''On average, how quickly is X reached by the rest of the network
+
+        Lease: ```P in```
+
+        Args:
+            node (str): Nodo. Por ejemplo: 'A'.
+        
+        Returns:
+            float, o None si el nodo no es alcanzado por ningun otro nodo.
+        '''
+        avg_tmp_proxs_to_node = self.average_temporal_proximity_to_node(node)
+        avg_tmp_proxs_to_node = list(filter(
+            lambda proximity: proximity is not None,
+            avg_tmp_proxs_to_node.values()))
+
+        try:
+            # restar 1 para no contar la prox temp promedio hacien el propio nodo:
+            return sum(avg_tmp_proxs_to_node) / (len(avg_tmp_proxs_to_node) -1)
+        except Exception as e:
+            return None
+
+
+###################################################################################################################################
+###################################################################################################################################
+###################################################################################################################################
+# Module utils:
 
 def __create_alphabet(num):
     '''Crea y retorna el alfabeto para representar con letras
