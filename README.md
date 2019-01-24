@@ -1,6 +1,6 @@
 # Grafos temporales
 
-Implementación de grafos temporales en Python inspirados en Kostakos
+Implementación de grafos temporales en Python inspirada en Kostakos
 
 ## Getting Started
 
