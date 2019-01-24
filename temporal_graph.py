@@ -1,3 +1,13 @@
+"""
+.. module:: temporal_graph
+   :platform: Unix, Windows
+   :synopsis: attemp of Kostakos temporal graphs implementation in Python.
+
+.. moduleauthor:: Leo Morales <moralesleonardo.rw@gmail.com>
+
+
+"""
+
 import matplotlib.pyplot as plt
 import matplotlib
 import networkx as nx
@@ -17,43 +27,60 @@ TIPOS_FECHAS = ["<class 'datetime.datetime'>",
                 "<class 'numpy.datetime64'>"]
 
 PALETA_MCDONALDS = {
-    'nodes_color': '#ffce00',
+    #'nodes_color': '#23512f',
+    'nodes_color': '#1f4729',
     'links_color': '#c20d00',
     'temp_links_color': '#23512f',
-    'label_color': '#23512f'
+    'label_color': '#ffce00'
 }
 
 EXP_NODO = re.compile(r"(?P<nodo>[a-zA-Z-_]+)(?P<posicion>[0-9]+)")
-
+ 
 
 class TemporalGraph:
     '''Grafo temporal
 
-        _times (list): Los _times nos sirven para manejar las
-            columnas (visual) de tiempos.
-            Lista de datetime.datetime.
-            Son todos los tiempos que entran en juego en el grafo
+        _times (list):
+            Los _times nos sirven para manejar las columnas (visual) de tiempos.
+            Es una lista de datetime.datetime.
+            Corresponde a todos los tiempos que entran en juego en el grafo
 
-        _last_node_appearance (dict): Estructura para mantener
-            el ultimo (mayor) datetime.datetime en el que un nodo
-            de su correspondiente fila es utilizado.
+        _last_node_appearance (dict):
+            Estructura para mantener el ultimo (mayor) datetime.datetime en el que un nodo de su correspondiente fila es utilizado.
             Por ejemplo:
+
                 {
+
                     'a': datetime.datetime(2018, 12, 19, 14, 34, 14, 736048)
+
                     'b': datetime.datetime(2018, 12, 19, 14, 40, 34, 736048)
+
                     ...
+
                 }
 
-        _graph (networkx.classes.digraph.DiGraph): Grafo dirigido
-            que le asigna peso 0.0 (instantáneo) a los links entre
-            nodos de distintas filas y peso con diferencia en segundos
-            entre nodos desagregados de una misma fila.
+        _graph (networkx.classes.digraph.DiGraph):
+            Grafo dirigido que le asigna peso 0.0 (instantáneo) a los links entre nodos de distintas filas y peso con diferencia en segundos entre nodos desagregados de una misma fila.
 
-        _step (int): Paso que nos sirve para guardar una imagen (img_<step>)
-            cada vez que se agrega un enlace/link.
+        _step (int):
+            Paso que nos sirve para guardar una imagen (img_<step>) cada vez que se agrega un enlace/link.
     '''
 
     def __init__(self, tiempos):
+        '''Inicializa un grafo temporal.
+
+        Args:
+            tiempos (list): Lista de tiempos (datetime.datetime o similares).
+
+        Raises:
+            Exception: Si no se especifican los tiempos del grafo.
+            
+            Exception: Los tipos de la lista no se encuentran en:
+                - datetime.datetime
+                - pandas._libs.tslibs.timestamps.Timestamp
+                - numpy.datetime64
+
+        '''
         if len(tiempos) == 0:
             raise Exception(
                 'Debe especificar los tiempos con los que trabaja el grafo')
@@ -69,11 +96,15 @@ class TemporalGraph:
         self._step = 0
 
     def _get_node_number(self, time, silent_fail=True):
-        '''Retorna el numero de columna a la que corresponde
-        el tiempo recibido (visualmente).
+        '''Retorna el numero de columna a la que corresponde el tiempo recibido (visualmente).
 
         Args:
             time (int): Un tiempo.
+            
+            silent_fail (bool): Indica si en caso de no encontrar el tiempo recibido, devolver por defecto 0.
+        
+        Raise:
+            Exception: Si el tiempo especificado no existe en el grafo.
         '''
         try:
             return self._times.index(time) + 1
@@ -86,31 +117,26 @@ class TemporalGraph:
                 raise Exception(exception_mes)
 
     def _get_representation(self, node_name, tiempo):
-        '''Un nodo 'a' en un grafo sera desagregado y representado
-        como 'aX' donde X es el lugar en el que se ubica _tiempo_
-        en la lista de todos los tiempos ordenados
+        '''Un nodo 'a' en un grafo sera desagregado y representado como 'aX' donde X es el lugar en el que se ubica _tiempo_ en la lista de todos los tiempos ordenados
 
         Args:
-            node_name (str): Nombre del nodo en el grafo
-                estatico. Por ej: 'a', 'x', etc.
+            node_name (str): Nombre del nodo en el grafo estatico. Por ej: 'a', 'x', etc.
                 TODO: Poder recibir labels mas compuestos
-            tiempo (datetime.datetime): tiempo en la
-                que participa el nodo.
 
-        Return:
-            str: En donde el node_name está concatenado
-                con el numero que representa la ubicación
-                del tiempo en la lista de tiempos ordenados
-                ascendentemente.
+            tiempo (datetime.datetime): tiempo en el que participa el nodo.
+
+        Returns:
+            str: En donde el node_name está concatenado con el numero que representa la ubicación del tiempo en la lista de tiempos ordenados ascendentemente.
         '''
         return '{}{}'.format(node_name.strip(), self._get_node_number(tiempo))
 
     def _update_last_appearances(self, nodeA, nodeB, time):
-        '''Guarda la ultima aparicion del nodo (temporalmente hablando)
-        en la estructura de ultimas apariciones.
+        '''Guarda la ultima aparicion del nodo (temporalmente hablando) en la estructura de ultimas apariciones.
 
-        TODO: Analizar si aporta algo el guardar todas las apariciones
-        de un nodo en una lista...
+        TODO: Analizar si aporta algo el guardar todas las apariciones de un nodo en una lista...
+
+        Returns:
+            None
         '''
         last_appearance = self._last_node_appearance.get(nodeA, None)
         if not last_appearance or (time > last_appearance):
@@ -121,26 +147,26 @@ class TemporalGraph:
             self._last_node_appearance[nodeB] = time
 
     def create_link(self, sender, receiver, time):
-        '''Debemos crear un link entre los nodos recibidos y ademas
-        crear un link con linea punteada a la aparición anterior
-        de la fila del nodo correspondiente.
+        '''Crea un link entre los nodos recibidos y ademas crea un link con linea punteada a la aparición anterior de la fila del nodo correspondiente.
 
         Args:
-            sender (str): Nodo (estatico) desde el cual se comienza
-                la interacción.
-            receiver (str): Nodo (estatico) desde el cual se recibe
-                la interacción.
-            time (datetime.datetime): Tiempo en el que se produce
-                la interacción.
+            sender (str): Nodo (estatico) desde el cual se comienza la interacción.
 
-        Precondicion:
-            sender != receiver
+            receiver (str): Nodo (estatico) desde el cual se recibe la interacción.
+                Precondicion: sender != receiver
 
-        Return:
-            None
+            time (datetime.datetime): Tiempo en el que se produce la interacción.
+
+
+        Returns:
+            tuple: tupla con los elementos:
+                - sender (str),
+                - receiver (str),
+                - time (datetime),
+                - instancia creada del nodo origen (str)
 
         Raises:
-            Exception: El ``time`` debe ser un datetime.datetime
+            Exception: El ``time`` debe ser un datetime.datetime 
                 de python.
         '''
         # limpiar sender y receiver:
@@ -206,8 +232,7 @@ class TemporalGraph:
         return self._graph
 
     def __ordena_letras_nodos(self, a, b):
-        '''Sirve para ordenar los nodos del grafo por la parte
-        alfabética de la etiqueta de los nodo.
+        '''Sirve para ordenar los nodos del grafo por la parte alfabética de la etiqueta de los nodo.
         El orden es por tamaño y a igual tamaño, alfabeticamente
 
         Returns:
@@ -242,17 +267,14 @@ class TemporalGraph:
             EXP_NODO.match(node).groupdict().get('posicion'))
 
     def _temporal_graph_positions(self):
-        '''En base a los nodos del grafo, devuelve sus posiciones en un temporal
-        graph.
-        Calcular las posiciones de los nodos es de relevancia en la visualizacion
-        del grafo temporal:
-            Instancias de los nodos en posicion horizontal.
-            Interacciones entre nodos en posicion vertical.
+        '''En base a los nodos del grafo, devuelve sus posiciones en un temporal graph.
+        Calcular las posiciones de los nodos es de relevancia en la visualizacion del grafo temporal:
+            - Instancias de los nodos en posicion horizontal.
+            - Interacciones entre nodos en posicion vertical.
 
         Returns:
-            dict: con las posiciones de cada nodo según el tiempo
-                en el que participen. Cada valor del dict es un
-                numpy.array con coords x e y por cada label del nodo
+            dict: con las posiciones de cada nodo según el tiempo en el que participen.
+                Cada valor del dict es un numpy.array con coords x e y por cada label del nodo.
 
                 {
                     'a1': [0, 0],
@@ -283,12 +305,11 @@ class TemporalGraph:
         '''Dibuja todos los enlaces recibidos con una forma curva
 
         Args:
-            links (list): Lista de tuplas con los labels
-                de los nodos origen y destino
-            ax (matplotlib.axes.Axes): Ejes sobre los cuales
-                se dibujan los enlaces.
+            links (list): Lista de tuplas con los labels de los nodos origen y destino.
 
-        Return:
+            ax (matplotlib.axes.Axes): Ejes sobre los cuales se dibujan los enlaces.
+
+        Returns:
             El ultimo enlace.
 
         --> Codigo base de la funcion
@@ -299,7 +320,7 @@ class TemporalGraph:
         # A cada nodo del grafo, se le asigna un circulo (geometría)
         for nodo in self._graph:
             circulo_nodo = Circle(
-                grid_positions[nodo], radius=0.15, alpha=0.01)
+                grid_positions[nodo], radius=0.15, alpha=0.06)
             ax.add_patch(circulo_nodo)
             self._graph.node[nodo]['patch'] = circulo_nodo
 
@@ -326,20 +347,18 @@ class TemporalGraph:
         '''Dibuja el grafo temporal
 
         Args:
-            only_save (bool): Indica si se deben guardar un png del grafo en
-                lugar de mostrarlo una vez terminado por pantalla (True).
-                TODO: Esto está pensado para generar el gif de forma manual.
-                    Será posible generarlo de forma automática?
+            only_save (bool): Indica si se deben guardar un png del grafo en lugar de mostrarlo una vez terminado por pantalla (True).
+                TODO: Esto está pensado para generar el gif de forma manual. Será posible generarlo de forma automática?
 
-            output_folder (str): Carpeta en la cual se van a guardar las
-                imagenes generadas. Por defecto, intenta guardarlas
-                en una carpeta 'output'
+            output_folder (str): Carpeta en la cual se van a guardar las imagenes generadas.
+                Por defecto, intenta guardarlas en una carpeta 'output'.
 
             paleta (dict): Paleta de colores para el grafo.
-                Debe contener las claves 'nodes_color', 'links_color',
-                'temp_links_color' para indicar los colores de los nodos,
-                de los links entre nodos distintos y los links entre nodos
-                del mismo nodo base (a1, a2, a3, etc --> a) respectivamente.
+                Debe contener las claves:
+                    - 'nodes_color',
+                    - 'links_color',
+                    - 'temp_links_color'
+                para indicar los colores de los nodos, de los links entre nodos distintos y los links entre nodos del mismo nodo base (a1, a2, a3, etc --> a) respectivamente.
 
         '''
         # setups:
@@ -365,7 +384,7 @@ class TemporalGraph:
 
         plt.figure(figsize=(18, 12))
         # nodes
-        nx.draw_networkx_nodes(self._graph, pos, node_size=nodes_size, alpha=.45,
+        nx.draw_networkx_nodes(self._graph, pos, node_size=nodes_size, alpha=.65,
                                node_color=nodes_color)
         # edges
         ax = plt.gca()
@@ -408,19 +427,17 @@ class TemporalGraph:
         Args:
             data_row (pandas.core.series.Series): Informacion de el o los enlaces
 
-            column_sender (str): Indice en la serie que corresponde al emisor. Puede
-                contener múltiples emisores separados por coma.
+            column_sender (str): Indice en la serie que corresponde al emisor.
+                Puede contener múltiples emisores separados por coma.
 
             column_destination (str): Indice en la serie que corresponde al receptor.
                 Puede contener múltiples receptores separados por coma.
 
-            column_time (str): Indice en la serie que corresponde al tiempo en el 
-                que se produce la interacción.
+            column_time (str): Indice en la serie que corresponde al tiempo en el que se produce la interacción.
 
-            verbose (bool): Indica si se imprime un mensajito por cada enlace creado,
+            verbose (bool): Indica si se imprime un mensajito por cada enlace creado.
 
-            save_steps_images (bool): Indica si se plotea todo el grafo cada vez
-                que se crea un nuevo enlace. 
+            save_steps_images (bool): Indica si se plotea todo el grafo cada vez que se crea un nuevo enlace.
 
         '''
         for origin in data_row[column_sender].split(','):
@@ -452,23 +469,23 @@ class TemporalGraph:
 
         Args:
 
-            data (pandas.Dataframe): 
+            data (pandas.Dataframe):
+            ::
                 | sender | recipient | time
-                |  str   |  str      | datetime.datetime
+                |  (str) |  (str)    | (datetime.datetime)
                 --------------------------------------------------
                 | A      |   B       | 2018-12-19 14:34:14.736048
                 | A      |   C, E    | 2018-12-19 14:34:15.736424
                 --------------------------------------------------
+            ::
 
             column_sender (str): Columna que corresponde al emisor.
 
             column_destination (str): Columna que corresponde al receptor.
 
-            column_time (str): Columna que corresponde al tiempo en el 
-                que se produce la interacción.
+            column_time (str): Columna que corresponde al tiempo en el que se produce la interacción.
 
-            save_images (bool): Indica si se tiene que guardar el grafo
-                cada vez que se agrega un nuevo enlace.
+            save_images (bool): Indica si se tiene que guardar el grafo cada vez que se agrega un nuevo enlace.
         '''
         if not {col_sender, col_destination, col_time}.issubset(set(data.columns.values)):
             exception_msg = '''
@@ -493,11 +510,9 @@ class TemporalGraph:
         Args:
             node_base (str): Nodo del cual se desean obtener las instancias.
 
-            from_time (int): Indica que se desean obtener instancias que se
-                encuentren en tiempos superiores (o igual) a este valor.
+            from_time (int): Indica que se desean obtener instancias que se encuentren en tiempos superiores (o igual) a este valor.
 
-            to_time (int): Indica que se desean obtener instancias que se
-                encuentren en tiempos inferiores (o igual) a este valor.
+            to_time (int): Indica que se desean obtener instancias que se encuentren en tiempos inferiores (o igual) a este valor.
 
         Returns:
             list: Instancias del nodo recibido.
@@ -520,15 +535,13 @@ class TemporalGraph:
         return list(instances)
 
     def _get_node_participations(self, node):
-        '''Retorna los tiempos en los que el nodo recibido
-        tiene una instancia.
+        '''Retorna los tiempos en los que el nodo recibido tiene una instancia.
 
         Args:
             node (str): Nodo. Por ejemplo: 'a', 'b', 'c', etc.
 
         Returns:
-            list of int: Tiempos de las instancias
-                del nodo recibido.
+            list of int: Tiempos de las instancias del nodo recibido.
         '''
         participations = [
             self._substract_position(node_i)
@@ -538,23 +551,16 @@ class TemporalGraph:
         return sorted(participations)
 
     def _get_first_instance_after_time(self, node_base, time=None):
-        '''Devuelve la instancia del nodo en el tiempo especificado
-        si existe, sino el mas próximo a partir del tiempo
-        recibido.
-        Sino se especifica el tiempo, se devuelve la primera instancia
-        que se encuentra.
+        '''Devuelve la instancia del nodo en el tiempo especificado si existe, sino el mas próximo a partir del tiempo recibido.
+        Sino se especifica el tiempo, se devuelve la primera instancia que se encuentra.
 
         Args:
-            node_base (str): Nodo base del que se desea
-                encontrar la instancia.
+            node_base (str): Nodo base del que se desea encontrar la instancia.
 
-            time (int): Tiempo a partir del cual se
-                desea encontrar la primer instancia para
-                el nodo base.
+            time (int): Tiempo a partir del cual se desea encontrar la primer instancia para el nodo base.
 
         Raises:
-            Exception si a partir del valor de tiempo recibido
-            no es posible encontrar una instancia del nodo base.
+            Exception si a partir del valor de tiempo recibido no es posible encontrar una instancia del nodo base.
         '''
         searched_node = '{}{}'.format(node_base, time)
         if self._graph.has_node(searched_node):
@@ -578,16 +584,13 @@ class TemporalGraph:
                     node_base, time))
 
     def _get_last_instance_before_time(self, node_base, time_max=None):
-        '''Retorna la instancia del nodo recibido en el tiempo
-        recibido, o la mas próxima anterior (sería comenzando de derecha a izquierda).
-        Si no se especifica el tiempo max, devuelve el último nodo instancia que se
-        encuentre para el node_base.
+        '''Retorna la instancia del nodo recibido en el tiempo recibido, o la mas próxima anterior (sería comenzando de derecha a izquierda).
+        Si no se especifica el tiempo max, devuelve el último nodo instancia que se encuentre para el node_base.
 
         Args:
             node_base (str): Nodo
 
-            time_max (int): El tiempo hasta el cual se busca
-                la instancia del nodo.
+            time_max (int): El tiempo hasta el cual se busca la instancia del nodo.
         '''
         participations = self._get_node_participations(node_base)
         if not time_max:
@@ -601,101 +604,21 @@ class TemporalGraph:
                 list(takewhile(lambda v: v < time_max, participations))[-1]
             )
 
-    def temporal_proximity_old(self, node_from, node_to, time_from=None, time_to=None):
-        '''Devuelve la proximidad temporal entre los nodos
-
-        Args:
-            node_from (str): Label del nodo (base) desde el cual se calcula 
-                la proximidad temporal. Por ej: 'A', 'B', etc.
-
-            node_to (str): Label del nodo (base) hasta el cual se calcula 
-                la proximidad temporal. Por ej: 'A', 'B', etc.
-
-            time_from (int): precondicion temporal (tiempo desde)
-
-            time_to (int): poscondicion temporal (tiempo hasta)
-
-        Returns:
-            list: Lista de los nodos que representan el camino mas corto
-                en cuanto a lo temporal.
-        '''
-
-        if time_from and time_to:
-            return nx.algorithms.shortest_path(
-                self._graph,
-                self._get_first_instance_after_time(node_from, time_from),
-                self._get_last_instance_before_time(node_to, time_to))
-
-        path = []
-        if time_from and not time_to:
-            # Buscar el primer camino que alcance a partir de time_from:
-            origin = self._get_first_instance_after_time(node_from, time_from)
-            base_time = self._substract_position(origin) - 1
-            while (not path) and (base_time <= max(self._get_node_participations(node_to))):
-                base_time += 1
-                if base_time not in self._get_node_participations(node_to):
-                    continue
-                destination = self._get_first_instance_after_time(
-                    node_to, base_time)
-                try:
-                    path = nx.algorithms.shortest_path(
-                        self._graph,
-                        origin,
-                        destination)
-                except nx.NetworkXNoPath as e:
-                    return []
-        if time_to and not time_from:
-            destination = self._get_first_instance_after_time(node_to, time_to)
-            base_time = self._substract_position(destination) + 1
-            while (not path) and (base_time >= min(self._get_node_participations(node_from))):
-                base_time -= 1
-                if base_time not in self._get_node_participations(node_from):
-                    continue
-                origin = self._get_first_instance_after_time(
-                    node_from, base_time)
-                try:
-                    path = nx.algorithms.shortest_path(
-                        self._graph,
-                        origin,
-                        destination)
-                except nx.NetworkXNoPath as e:
-                    continue
-
-        else:
-            paths = []
-            for origin_instance in self._get_node_instances(node_from):
-                origin_time = self._substract_position(origin_instance)
-                for destination_instance in self._get_node_instances(node_to, from_time=origin_time):
-                    if nx.algorithms.has_path(self._graph, origin_instance, destination_instance):
-                        # Si hay un camino entre las instancias:
-                        # guardar
-                        paths.append(nx.algorithms.shortest_path(
-                            self._graph,
-                            origin_instance,
-                            destination_instance))
-                        # cortar:
-                        break
-            path = min(paths, key=lambda path: len(path)) if paths else []
-
-        return path
 
     def temporal_proximity(self, node_from, node_to, time_from=None, time_to=None, verbose=False):
         '''Devuelve la proximidad temporal entre los nodos
 
         Args:
-            node_from (str): Label del nodo (base) desde el cual se calcula 
-                la proximidad temporal. Por ej: 'A', 'B', etc.
+            node_from (str): Label del nodo (base) desde el cual se calcula la proximidad temporal. Por ej: 'A', 'B', etc.
 
-            node_to (str): Label del nodo (base) hasta el cual se calcula 
-                la proximidad temporal. Por ej: 'A', 'B', etc.
+            node_to (str): Label del nodo (base) hasta el cual se calcula la proximidad temporal. Por ej: 'A', 'B', etc.
 
             time_from (int): precondicion temporal (tiempo desde)
 
             time_to (int): poscondicion temporal (tiempo hasta)
 
         Returns:
-            list: Lista de los nodos que representan el camino mas corto
-                en cuanto a lo temporal, desde node_from hasta node_to.
+            list: Lista de los nodos que representan el camino mas corto en cuanto a lo temporal, desde node_from hasta node_to.
         '''
         self.__logging(
             verbose,
@@ -790,16 +713,15 @@ class TemporalGraph:
         '''ATP
 
         Args:
-            node_from (str): Label del nodo (base) desde el cual se calcula 
-                la proximidad temporal promedio. Por ej: 'A', 'B', etc.
+            node_from (str): Label del nodo (base) desde el cual se calcula la proximidad temporal promedio.
+                Por ej: 'A', 'B', etc.
 
-            node_to (str): Label del nodo (base) hasta el cual se calcula 
-                la proximidad temporal promedio. Por ej: 'A', 'B', etc.
+            node_to (str): Label del nodo (base) hasta el cual se calcula la proximidad temporal promedio.
+                Por ej: 'A', 'B', etc.
 
-            verbose (bool): Indica si se muestra la salida de los pasos
-                realizados.
+            verbose (bool): Indica si se muestra la salida de los pasos realizados.
 
-        Return:
+        Returns:
             float: En promedio, cuánto tiempo toma ir desde X hasta Y.
         '''
         if not self._node_in_graph(node_from):
@@ -876,12 +798,18 @@ class TemporalGraph:
             dict: Diccionario con las proximidades temporales promedio 
                 desde el nodo recibido. Por ejemplo, para 'A' se 
                 puede devolver:
+
                 {
                     'A': 0.0,
+
                     'B': 561600.0,
+
                     'C': 43200.0,
+
                     'D': 144000.0,
+
                     'E': 43200.0
+                
                 }
         '''
         avg_tmp_proxs = {}
@@ -892,7 +820,8 @@ class TemporalGraph:
         return avg_tmp_proxs
 
     def average_temporal_reach(self, node):
-        '''on average, how quickly does X reach the rest of the network
+        '''On average, how quickly does X reach the rest of the network.
+
         Lease: ```P out```
 
         Args:
@@ -914,24 +843,29 @@ class TemporalGraph:
             return None
 
     def average_temporal_proximity_to_node(self, node):
-        '''Retorna las proximidades temporales promedio del resto
-        de los nodos del grafo hacia el nodo recibido
+        '''Retorna las proximidades temporales promedio del resto de los nodos del grafo hacia el nodo recibido.
 
         Args:
-            node (str): Nodo hacia el cual calcular las
-                proximidades temporales promedio.
+            node (str): Nodo hacia el cual calcular las proximidades temporales promedio.
                 Por ejemplo: 'D'
 
         Returns:
-            dict: Diccionario con las proximidades temporales promedio 
-                desde el nodo recibido. Por ejemplo, para 'D' se 
-                puede devolver:
+            dict: Diccionario con las proximidades temporales promedio desde el nodo recibido.
+
+                Por ejemplo, para 'D' se puede devolver:
+
                 {
+
                     'A': 144000.0,
+
                     'B': 374400.0,
+
                     'C': None,
+
                     'D': 0.0,
+
                     'E': 86400.0
+
                 }
         '''
         avg_tmp_proxs = {}
@@ -942,7 +876,7 @@ class TemporalGraph:
         return avg_tmp_proxs
 
     def average_temporal_reachability(self, node):
-        '''On average, how quickly is X reached by the rest of the network
+        '''On average, how quickly is X reached by the rest of the network.
 
         Lease: ```P in```
 
@@ -970,10 +904,9 @@ class TemporalGraph:
 # Module utils:
 
 def __create_alphabet(num):
-    '''Crea y retorna el alfabeto para representar con letras
-    tanta cantidad de elementos como lo indique ``num``
-    Retorna la lista dada vuelta para poder ir usando .pop()
-    y mantener el orden alfabético.
+    '''Crea y retorna el alfabeto para representar con letras tanta cantidad de elementos como lo indique ``num``
+
+    Retorna la lista dada vuelta para poder ir usando .pop() y mantener el orden alfabético.
 
     '''
     alphabet = []

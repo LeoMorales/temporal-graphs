@@ -1,0 +1,371 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Documentación Grafos Temporales &#8212; Temporal Graphs 0.1 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Welcome to Temporal Graphs’s documentation!" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="documentacion-grafos-temporales">
+<h1>Documentación Grafos Temporales<a class="headerlink" href="#documentacion-grafos-temporales" title="Permalink to this headline">¶</a></h1>
+<p>Grafos temporales de Kostakos (aproximación) - Implementación en Python</p>
+<div class="toctree-wrapper compound">
+</div>
+<div class="section" id="getting-started">
+<h2>Getting started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h2>
+<p>La mejor forma de explorar el módulo es dándole a los notebooks disponibles en la carpeta ‘notebooks’</p>
+</div>
+<div class="section" id="source-code">
+<h2>Source code<a class="headerlink" href="#source-code" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="temporal_graph.TemporalGraph">
+<em class="property">class </em><code class="descclassname">temporal_graph.</code><code class="descname">TemporalGraph</code><span class="sig-paren">(</span><em>tiempos</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Grafo temporal</p>
+<dl class="docutils">
+<dt>_times (list):</dt>
+<dd>Los _times nos sirven para manejar las columnas (visual) de tiempos.
+Es una lista de datetime.datetime.
+Corresponde a todos los tiempos que entran en juego en el grafo</dd>
+<dt>_last_node_appearance (dict):</dt>
+<dd><p class="first">Estructura para mantener el ultimo (mayor) datetime.datetime en el que un nodo de su correspondiente fila es utilizado.
+Por ejemplo:</p>
+<blockquote class="last">
+<div><p>{</p>
+<blockquote>
+<div><p>‘a’: datetime.datetime(2018, 12, 19, 14, 34, 14, 736048)</p>
+<p>‘b’: datetime.datetime(2018, 12, 19, 14, 40, 34, 736048)</p>
+<p>…</p>
+</div></blockquote>
+<p>}</p>
+</div></blockquote>
+</dd>
+<dt>_graph (networkx.classes.digraph.DiGraph):</dt>
+<dd>Grafo dirigido que le asigna peso 0.0 (instantáneo) a los links entre nodos de distintas filas y peso con diferencia en segundos entre nodos desagregados de una misma fila.</dd>
+<dt>_step (int):</dt>
+<dd>Paso que nos sirve para guardar una imagen (img_&lt;step&gt;) cada vez que se agrega un enlace/link.</dd>
+</dl>
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.average_temporal_proximity">
+<code class="descname">average_temporal_proximity</code><span class="sig-paren">(</span><em>node_from</em>, <em>node_to</em>, <em>verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.average_temporal_proximity" title="Permalink to this definition">¶</a></dt>
+<dd><p>ATP</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><dl class="first docutils">
+<dt>node_from (str): Label del nodo (base) desde el cual se calcula la proximidad temporal promedio.</dt>
+<dd>Por ej: ‘A’, ‘B’, etc.</dd>
+<dt>node_to (str): Label del nodo (base) hasta el cual se calcula la proximidad temporal promedio.</dt>
+<dd>Por ej: ‘A’, ‘B’, etc.</dd>
+</dl>
+<p class="last">verbose (bool): Indica si se muestra la salida de los pasos realizados.</p>
+</dd>
+<dt>Returns:</dt>
+<dd>float: En promedio, cuánto tiempo toma ir desde X hasta Y.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.average_temporal_proximity_from_node">
+<code class="descname">average_temporal_proximity_from_node</code><span class="sig-paren">(</span><em>node</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.average_temporal_proximity_from_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retorna las proximidades temporales promedio del nodo
+hacia el resto de los nodos</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><dl class="first last docutils">
+<dt>node (str): Nodo desde el cual calcular las</dt>
+<dd>proximidades temporales promedio.
+Por ejemplo: ‘A’</dd>
+</dl>
+</dd>
+<dt>Returns:</dt>
+<dd><dl class="first last docutils">
+<dt>dict: Diccionario con las proximidades temporales promedio </dt>
+<dd><p class="first">desde el nodo recibido. Por ejemplo, para ‘A’ se 
+puede devolver:</p>
+<dl class="docutils">
+<dt>{</dt>
+<dd><p class="first">‘A’: 0.0,</p>
+<p>‘B’: 561600.0,</p>
+<p>‘C’: 43200.0,</p>
+<p>‘D’: 144000.0,</p>
+<p class="last">‘E’: 43200.0</p>
+</dd>
+</dl>
+<p class="last">}</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.average_temporal_proximity_to_node">
+<code class="descname">average_temporal_proximity_to_node</code><span class="sig-paren">(</span><em>node</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.average_temporal_proximity_to_node" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retorna las proximidades temporales promedio del resto de los nodos del grafo hacia el nodo recibido.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><dl class="first last docutils">
+<dt>node (str): Nodo hacia el cual calcular las proximidades temporales promedio.</dt>
+<dd>Por ejemplo: ‘D’</dd>
+</dl>
+</dd>
+<dt>Returns:</dt>
+<dd><p class="first">dict: Diccionario con las proximidades temporales promedio desde el nodo recibido.</p>
+<blockquote class="last">
+<div><p>Por ejemplo, para ‘D’ se puede devolver:</p>
+<p>{</p>
+<blockquote>
+<div><p>‘A’: 144000.0,</p>
+<p>‘B’: 374400.0,</p>
+<p>‘C’: None,</p>
+<p>‘D’: 0.0,</p>
+<p>‘E’: 86400.0</p>
+</div></blockquote>
+<p>}</p>
+</div></blockquote>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.average_temporal_reach">
+<code class="descname">average_temporal_reach</code><span class="sig-paren">(</span><em>node</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.average_temporal_reach" title="Permalink to this definition">¶</a></dt>
+<dd><p>On average, how quickly does X reach the rest of the network.</p>
+<p>Lease: <code class="docutils literal notranslate"><span class="pre">`P</span> <span class="pre">out`</span></code></p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>node (str): Nodo. Por ejemplo: ‘A’.</dd>
+<dt>Returns:</dt>
+<dd>float, o None si desde el nodo no se alcanza ningun otro nodo.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.average_temporal_reachability">
+<code class="descname">average_temporal_reachability</code><span class="sig-paren">(</span><em>node</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.average_temporal_reachability" title="Permalink to this definition">¶</a></dt>
+<dd><p>On average, how quickly is X reached by the rest of the network.</p>
+<p>Lease: <code class="docutils literal notranslate"><span class="pre">`P</span> <span class="pre">in`</span></code></p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd>node (str): Nodo. Por ejemplo: ‘A’.</dd>
+<dt>Returns:</dt>
+<dd>float, o None si el nodo no es alcanzado por ningun otro nodo.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.build_links_from_data">
+<code class="descname">build_links_from_data</code><span class="sig-paren">(</span><em>data</em>, <em>col_sender='sender'</em>, <em>col_destination='recipient'</em>, <em>col_time='time'</em>, <em>save_images=False</em>, <em>verbose=True</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.build_links_from_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Crea links en base al dataframe con la data correspondiente.</p>
+<p>Args:</p>
+<blockquote>
+<div><p>data (pandas.Dataframe):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">|</span> <span class="n">sender</span> <span class="o">|</span> <span class="n">recipient</span> <span class="o">|</span> <span class="n">time</span>
+<span class="o">|</span>  <span class="p">(</span><span class="nb">str</span><span class="p">)</span> <span class="o">|</span>  <span class="p">(</span><span class="nb">str</span><span class="p">)</span>    <span class="o">|</span> <span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">)</span>
+<span class="o">--------------------------------------------------</span>
+<span class="o">|</span> <span class="n">A</span>      <span class="o">|</span>   <span class="n">B</span>       <span class="o">|</span> <span class="mi">2018</span><span class="o">-</span><span class="mi">12</span><span class="o">-</span><span class="mi">19</span> <span class="mi">14</span><span class="p">:</span><span class="mi">34</span><span class="p">:</span><span class="mf">14.736048</span>
+<span class="o">|</span> <span class="n">A</span>      <span class="o">|</span>   <span class="n">C</span><span class="p">,</span> <span class="n">E</span>    <span class="o">|</span> <span class="mi">2018</span><span class="o">-</span><span class="mi">12</span><span class="o">-</span><span class="mi">19</span> <span class="mi">14</span><span class="p">:</span><span class="mi">34</span><span class="p">:</span><span class="mf">15.736424</span>
+<span class="o">--------------------------------------------------</span>
+</pre></div>
+</div>
+<p>column_sender (str): Columna que corresponde al emisor.</p>
+<p>column_destination (str): Columna que corresponde al receptor.</p>
+<p>column_time (str): Columna que corresponde al tiempo en el que se produce la interacción.</p>
+<p>save_images (bool): Indica si se tiene que guardar el grafo cada vez que se agrega un nuevo enlace.</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.create_link">
+<code class="descname">create_link</code><span class="sig-paren">(</span><em>sender</em>, <em>receiver</em>, <em>time</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.create_link" title="Permalink to this definition">¶</a></dt>
+<dd><p>Crea un link entre los nodos recibidos y ademas crea un link con linea punteada a la aparición anterior de la fila del nodo correspondiente.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><p class="first">sender (str): Nodo (estatico) desde el cual se comienza la interacción.</p>
+<dl class="docutils">
+<dt>receiver (str): Nodo (estatico) desde el cual se recibe la interacción.</dt>
+<dd>Precondicion: sender != receiver</dd>
+</dl>
+<p class="last">time (datetime.datetime): Tiempo en el que se produce la interacción.</p>
+</dd>
+<dt>Returns:</dt>
+<dd><dl class="first last docutils">
+<dt>tuple: tupla con los elementos:</dt>
+<dd><ul class="first last simple">
+<li>sender (str),</li>
+<li>receiver (str),</li>
+<li>time (datetime),</li>
+<li>instancia creada del nodo origen (str)</li>
+</ul>
+</dd>
+</dl>
+</dd>
+<dt>Raises:</dt>
+<dd><dl class="first last docutils">
+<dt>Exception: El <code class="docutils literal notranslate"><span class="pre">time</span></code> debe ser un datetime.datetime </dt>
+<dd>de python.</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.get_graph">
+<code class="descname">get_graph</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.get_graph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retorna el grafo de networkx</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.plot">
+<code class="descname">plot</code><span class="sig-paren">(</span><em>only_save=False</em>, <em>output_folder='output'</em>, <em>paleta={'label_color': '#23512f'</em>, <em>'links_color': '#c20d00'</em>, <em>'nodes_color': '#ffce00'</em>, <em>'temp_links_color': '#23512f'}</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dibuja el grafo temporal</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><dl class="first last docutils">
+<dt>only_save (bool): Indica si se deben guardar un png del grafo en lugar de mostrarlo una vez terminado por pantalla (True).</dt>
+<dd>TODO: Esto está pensado para generar el gif de forma manual. Será posible generarlo de forma automática?</dd>
+<dt>output_folder (str): Carpeta en la cual se van a guardar las imagenes generadas.</dt>
+<dd>Por defecto, intenta guardarlas en una carpeta ‘output’.</dd>
+<dt>paleta (dict): Paleta de colores para el grafo.</dt>
+<dd><dl class="first docutils">
+<dt>Debe contener las claves:</dt>
+<dd><ul class="first last simple">
+<li>‘nodes_color’,</li>
+<li>‘links_color’,</li>
+<li>‘temp_links_color’</li>
+</ul>
+</dd>
+</dl>
+<p class="last">para indicar los colores de los nodos, de los links entre nodos distintos y los links entre nodos del mismo nodo base (a1, a2, a3, etc –&gt; a) respectivamente.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.temporal_proximity">
+<code class="descname">temporal_proximity</code><span class="sig-paren">(</span><em>node_from</em>, <em>node_to</em>, <em>time_from=None</em>, <em>time_to=None</em>, <em>verbose=False</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.temporal_proximity" title="Permalink to this definition">¶</a></dt>
+<dd><p>Devuelve la proximidad temporal entre los nodos</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><p class="first">node_from (str): Label del nodo (base) desde el cual se calcula la proximidad temporal. Por ej: ‘A’, ‘B’, etc.</p>
+<p>node_to (str): Label del nodo (base) hasta el cual se calcula la proximidad temporal. Por ej: ‘A’, ‘B’, etc.</p>
+<p>time_from (int): precondicion temporal (tiempo desde)</p>
+<p class="last">time_to (int): poscondicion temporal (tiempo hasta)</p>
+</dd>
+<dt>Returns:</dt>
+<dd>list: Lista de los nodos que representan el camino mas corto en cuanto a lo temporal, desde node_from hasta node_to.</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="temporal_graph.TemporalGraph.weight">
+<code class="descname">weight</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span><a class="headerlink" href="#temporal_graph.TemporalGraph.weight" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retorna el peso del camino recibido.</p>
+<dl class="docutils">
+<dt>Args:</dt>
+<dd><dl class="first last docutils">
+<dt>path (list): lista de nodos del camino.</dt>
+<dd>Se espera que la lista contenga instancias de nodos.</dd>
+</dl>
+</dd>
+<dt>Returns:</dt>
+<dd>float: Peso del camino.</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Temporal Graphs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Documentación Grafos Temporales</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#getting-started">Getting started</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#source-code">Source code</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to Temporal Graphs’s documentation!</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Leo Morales.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/temporal_graphs.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
