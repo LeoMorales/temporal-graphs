@@ -19,6 +19,7 @@ import datetime
 import pandas as pd
 import re
 from itertools import takewhile
+import math
 
 
 TIPOS_FECHAS = ["<class 'datetime.datetime'>",
@@ -296,8 +297,8 @@ class TemporalGraph:
                 }   
         '''
         subgraph = subgraph if subgraph else self._graph
-        xbase = 0.0
-        ybase = 0.0
+        xbase = 0.5
+        ybase = 0.5
         # Armar una grilla de columnas por los labels letras:
         all_letters = sorted(list(set(
             [self._get_base_node(node)
@@ -306,10 +307,16 @@ class TemporalGraph:
             key=functools.cmp_to_key(self.__ordena_letras_nodos))
         positions = {}
         for node in subgraph.nodes():
-            ypos = ybase - all_letters.index(self._get_base_node(node))
+            ypos = ybase + all_letters.index(self._get_base_node(node))
             xpos = xbase + float(
                 self._substract_position(node))
-            positions[node] = np.array((xpos, ypos))
+            #print('position:', xpos, ypos)
+            positions[node] = np.array(
+                (
+                    xpos,
+                    ypos * -1
+                )
+            )
         print('Positions', len(positions), 'nodos')
         return positions
 
@@ -322,8 +329,7 @@ class TemporalGraph:
             ax (matplotlib.axes.Axes): Ejes sobre los cuales se dibujan los enlaces.
 
         Returns:
-            El ultimo enlace.
-
+        
         --> Codigo base de la funcion
             --> https://groups.google.com/forum/#!topic/networkx-discuss/FwYk0ixLDuY
 
@@ -334,7 +340,7 @@ class TemporalGraph:
 
         for nodo in graph:
             circulo_nodo = Circle(
-                grid_positions[nodo], radius=0.15, alpha=0.06)
+                grid_positions[nodo], radius=0.05, alpha=0.06)
             ax.add_patch(circulo_nodo)
             graph.node[nodo]['patch'] = circulo_nodo
 
@@ -362,13 +368,26 @@ class TemporalGraph:
 
         return
 
-    def _get_subgraph_by_label_condition(self, label_condition):
+    def get_subgraph_by_label_condition(self, label_condition, show_instances=False):
+        '''Retorna el subgrafo que resulta del filtrado de los enlaces que tienen label igual a label_condition.
+        El tema que me surgió acá es que si filtramos los enlaces, hay instancias que quedan afuera y después deberíamos crear un enlace con linea punteada que sume los dos pesos de enlaces.
+
+        Args:
+            label_condition (str): Valor a comparar contra el atributo 'label'
+
+            show_instances (bool): Indica si se muestran los enlaces horizontales (y los nodos) de los nodos que participan en los enlaces filtrados.
+
+        Return:
+            Digraph: Copia del grafo filtrado.
+                Es copia para poder trabjar con el grafo, sin modificar el original.
+        '''
         edges = [
             (emisor, receptor)
             for emisor, receptor, data
             in self._graph.edges(data=True)
-            if data.get('label') == label_condition]
-        return self._graph.edge_subgraph(edges)
+            if ((data.get('label') == label_condition) or (show_instances and data.get('weight') > 0.0))]
+        # Bug fixed?
+        return self._graph.edge_subgraph(edges).copy()
     
 
     def plot(self, only_save=False, output_folder='output', paleta=PALETA_MCDONALDS,
@@ -389,13 +408,13 @@ class TemporalGraph:
                     - 'temp_links_color'
                 para indicar los colores de los nodos, de los links entre nodos distintos y los links entre nodos del mismo nodo base (a1, a2, a3, etc --> a) respectivamente.
 
+        Returns:
+            Digraph: Grafo que se utilizo para dibujar.
+
         '''
         # setups:
         line_width = 4
-        nodes_color = paleta['nodes_color']
         nodes_size = 1000
-        dashed_edges_color = paleta['temp_links_color']
-        continuos_edges_color = paleta['links_color']
 
         if only_save:
             # matplotlib.use('Agg')
@@ -403,7 +422,8 @@ class TemporalGraph:
 
         # filtrar los nodos que interesen:
         if filter_labels:
-            work_graph = self._get_subgraph_by_label_condition(filter_labels)
+            work_graph = self.get_subgraph_by_label_condition(
+                filter_labels, show_instances=True)
         else:
             work_graph = self._graph
 
@@ -415,7 +435,7 @@ class TemporalGraph:
             data=True) if d['weight'] > 0.0]
 
         # posiciones de cada nodo: en base al label, los arcos no importan en este paso:
-        pos = self._temporal_graph_positions()
+        pos = self._temporal_graph_positions(work_graph)
 
         plt.figure(figsize=(20, 14))
         # edges
@@ -426,32 +446,9 @@ class TemporalGraph:
             pos,
             node_size=nodes_size,
             alpha=.65,
-            node_color=nodes_color,
+            node_color=paleta['nodes_color'],
             ax=ax)
         
-
-        # Dibujar conecciones entre nodos (interacciones):
-        self._draw_interconnections(
-            econtin,
-            ax,
-            pos,
-            #work_graph,
-            self._graph,
-            link_color=continuos_edges_color)
-        
-        # Dibujar conecciones entre nodos 'desagregados' (participaciones temporales del nodo):
-        nx.draw_networkx_edges(
-            #work_graph,
-            self._graph,
-            pos,
-            edgelist=edashed,
-            width=line_width,
-            alpha=0.25,
-            edge_color=dashed_edges_color,
-            ax=ax,
-            style='dashed',
-            arrows=False)
-
         # labels
         nx.draw_networkx_labels(
             work_graph,
@@ -462,6 +459,28 @@ class TemporalGraph:
             ax=ax
             )
 
+        
+        # Dibujar conecciones entre nodos 'desagregados' (participaciones temporales del nodo):
+        nx.draw_networkx_edges(
+            work_graph,
+            pos,
+            edgelist=edashed,
+            width=line_width,
+            alpha=0.27,
+            edge_color=paleta['temp_links_color'],
+            ax=ax,
+            style='dashed',
+            arrows=False)
+
+        # Dibujar conecciones entre nodos (interacciones):
+        self._draw_interconnections(
+            econtin,
+            ax,
+            pos,
+            work_graph,
+            link_color=paleta['links_color'])
+
+
         plt.axis('off')
 
         if only_save:
@@ -470,6 +489,8 @@ class TemporalGraph:
             plt.close()
         else:
             plt.show()
+
+        return work_graph
 
     def _build_links(self, data_row,
                      column_sender,
