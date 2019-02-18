@@ -1434,6 +1434,89 @@ class TemporalGraph:
         return pd.DataFrame(table, index=nodos)
 
 
+###########################################################################################################################
+############################## Temporal availability ######################################################################
+###########################################################################################################################
+
+    def temporal_availability(self, nodeX, nodeY):
+        origin_node_participations = self._get_node_participations(nodeX)
+        n = len(origin_node_participations)
+        geodesic_distances = [self.geodesic_proximity(nodeX, nodeY, time, None) for time in origin_node_participations]
+        not_null_geodesic_distances = list(
+            filter(
+                lambda distance: distance is not None,
+                geodesic_distances
+                )
+            )
+        return len(not_null_geodesic_distances) / n
+
+    def temporal_availability_from_node(self, nodeX, Vout=True):
+        temporal_availability_to = {}
+        graph_nodes = self._get_nodes()
+        for nodeY in graph_nodes:
+            temporal_availability_to[nodeY] = self.temporal_availability(nodeX, nodeY)
+
+        if Vout:
+            # no se deben contar en el calculo la disponibilidad temporal hacia el propio nodo:
+            temporal_availability_to['Vout'] = (sum(temporal_availability_to.values()) -1) / (len(graph_nodes) -1)
+
+        return temporal_availability_to
+
+    def temporal_availability_to_node(self, nodeY, Vin=True):
+        temporal_availability_from = {}
+        graph_nodes = self._get_nodes()
+        for nodeX in graph_nodes:
+            temporal_availability_from[nodeX] = self.temporal_availability(nodeX, nodeY)
+
+        if Vin:
+            # no se deben contar en el calculo la disponibilidad temporal hacia el propio nodo:
+            temporal_availability_from['Vin'] = (sum(temporal_availability_from.values()) -1) / (len(graph_nodes) -1)
+
+        return temporal_availability_from
+
+    def average_geodesic_reach(self, node):
+        '''Lease  `Vout`'''
+        return self.temporal_availability_from_node(node, Vout=True).get('Vout')
+
+    def temporal_availability_table(self, formatear=None, conversor=None, verbose=False):
+        tag = '>> temporal_availability_table:\n'
+        if not formatear:
+            formatear = lambda v: v
+        if not conversor:
+            conversor = lambda v: v
+
+        nodos = self._get_nodes()
+        table = {}
+        G_outs = []
+        for nodo in nodos:
+            # Para cada nodo:
+            # Primero calcular las disponibilidades temporales promedios contra los demas nodos:
+            self.__logging(
+                verbose,
+                '{}{}: {}'.format(
+                    tag,
+                    nodo,
+                    self.temporal_availability_to_node(
+                        nodo, Vin=True)))
+            table[nodo] = [formatear(conversor(availability))
+                           for availability
+                           in self.temporal_availability_to_node(nodo, Vin=True).values()]
+            
+            G_outs.append(
+                formatear(
+                    conversor(
+                        self.average_geodesic_reach(nodo))))
+
+        # un pequeño guion en la interseccion de Pin y Pout:
+        # mejor None, para mantener el tipo del df homogéneo:
+        G_outs.append(None)
+        table['Gout'] = G_outs
+
+        # Usamos la lista de nodos como header, entonces agregamos Pin:
+        nodos.append('Gin')
+        return pd.DataFrame(table, index=nodos)
+
+
 ###################################################################################################################################
 ###################################################################################################################################
 ###################################################################################################################################
