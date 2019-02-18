@@ -1425,7 +1425,8 @@ class TemporalGraph:
                         self.average_geodesic_reach(nodo))))
 
         # un pequeño guion en la interseccion de Pin y Pout:
-        G_outs.append('-')
+        # mejor None, para mantener el tipo del df homogéneo:
+        G_outs.append(None)
         table['Gout'] = G_outs
 
         # Usamos la lista de nodos como header, entonces agregamos Pin:
