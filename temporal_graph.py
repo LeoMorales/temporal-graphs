@@ -317,7 +317,7 @@ class TemporalGraph:
                     ypos * -1
                 )
             )
-        print('Positions', len(positions), 'nodos')
+        print('Positions', len(positions), 'nodes')
         return positions
 
     def _draw_interconnections(self, links, ax, grid_positions, graph, sg=None, link_color='k'):
@@ -625,6 +625,7 @@ class TemporalGraph:
 
         Returns:
             list of int: Tiempos de las instancias del nodo recibido.
+                Ej: para los nodos 'a1', 'a2', 'a7' --> [1, 2, 7]
         '''
         participations = [
             self._substract_position(node_i)
@@ -687,6 +688,9 @@ class TemporalGraph:
                 list(takewhile(lambda v: v < time_max, participations))[-1]
             )
 
+###########################################################################################################################
+############################## Temporal proximity #########################################################################
+###########################################################################################################################
 
     def temporal_proximity(self, node_from, node_to, time_from=None, time_to=None, verbose=False):
         '''Devuelve la proximidad temporal entre los nodos
@@ -933,7 +937,7 @@ class TemporalGraph:
                 Por ejemplo: 'D'
 
         Returns:
-            dict: Diccionario con las proximidades temporales promedio desde el nodo recibido.
+            dict: Diccionario con las proximidades temporales promedio hasta el nodo recibido.
 
                 Por ejemplo, para 'D' se puede devolver:
 
@@ -975,10 +979,62 @@ class TemporalGraph:
             avg_tmp_proxs_to_node.values()))
 
         try:
-            # restar 1 para no contar la prox temp promedio hacien el propio nodo:
+            # restar 1 a la len(***) para no contar la prox temp promedio hacia el propio nodo:
             return sum(avg_tmp_proxs_to_node) / (len(avg_tmp_proxs_to_node) - 1)
         except Exception as e:
             return None
+
+
+    def temporal_proximity_table(
+        self, formatear=None, conversor=None):
+        '''El objetivo del loop principal es crear una estructura como la siguiente:
+        {
+            'A': ['0.00', '-', '-', '-', '-', '-'],
+            'B': ['6.50', '0.00', '-', '5.33', '12.00', '7.94'],
+            'C': ['0.50', '2.50', '0.00', '-', '-', '1.50'],
+            'D': ['1.67', '4.33', '-', '0.00', '1.00', '2.33'],
+            'E': ['0.50', '-', '-', '-', '0.00', '0.50'],
+            'Pout': ['2.29', '3.42', '-', '5.33', '6.50', '-']
+        }
+        '''
+        if not formatear:
+            formatear = lambda v: v
+        if not conversor:
+            conversor = lambda v: v
+
+        nodos = self._get_nodes()
+        table = {}
+        P_outs = []
+        for nodo in nodos:
+            # Para cada nodo:
+            # Primero calcular las proximidades temporales promedios contra los demas nodos:
+            table[nodo] = [formatear(conversor(proximity))
+                           for proximity
+                           in self.average_temporal_proximity_to_node(nodo).values()]
+            
+            # Luego agregar a la lista el promedio de alcance hacia el nodo
+            # por parte de los demas nodos (Pin):
+            table[nodo].append(
+                formatear(
+                    conversor(
+                        self.average_temporal_reachability(nodo))))
+            
+            P_outs.append(
+                formatear(
+                    conversor(
+                        self.average_temporal_reach(nodo))))
+
+        # un pequeño guion en la interseccion de Pin y Pout:
+        P_outs.append('-')
+        table['Pout'] = P_outs
+
+        # Usamos la lista de nodos como header, entonces agregamos Pin:
+        nodos.append('Pin')
+        return pd.DataFrame(table, index=nodos)
+
+###########################################################################################################################
+############################## Links from csv     #########################################################################
+###########################################################################################################################
 
     def _clean_data(self, df, col_sender, col_recipient, col_time, format_times=True,
         formato_fecha=FORMATO_FECHA, col_label=None):
@@ -1062,13 +1118,360 @@ class TemporalGraph:
             col_label='label',
             verbose=verbose)
 
+    def get_previous_instance(self, instance):
+        '''Retorna la instancia temporal anterior a la instancia recibida
+
+        Args:
+            instance (str): Instancia de nodo. Ej: a1, a8, aa40
+
+        Returns:
+            list: lista con el la instancia del nodo solicitada y la instancia temporal anterior.
+                Por ejemplo: ['a1', 'a2']
+                Si la instancia es la primera aparicion temporal del nodo, retorna una lista con esa unica instancia.
+                Si la instancia aun no ha aparecido, retorna las ultimas instancias para el nodo general, por ejemplo:
+                    Si el nodo 'a' tiene instancias 'a1', 'a2', 'a11', 'a15', y recibimos la instancia 'a145',
+                    este metodo retorna ['a11', 'a15']
+
+        '''
+        return self._get_node_instances(
+            self._get_base_node(instance),
+            to_time=self._substract_position(instance))[-2:]
+
+###########################################################################################################################
+############################## Geodesic proximity #########################################################################
+###########################################################################################################################
+    def geodesic_proximity(self, node_origin, node_target, temporal_precondition=None, temporal_postcondition=None, verbose=False):
+        '''g(X,Y,ta,tb)
+        Denotes the least number of hops between X and Y given temporal precondition ta for X and temporal post-condition tb for Y.
+
+        Returns:
+            int: the least number of hops between X and Y given temporal precondition ta for X and temporal post-condition tb for Y.
+        '''
+        tag = '>> geodesic_proximity:\n'
+        paths_found = []
+        # En el caso de g(A,B,tx,null), g(A,B,null,ty), g(A,B,tx,ty) 
+        # debemos comenzar a buscar desde la primera instancia que ocurre del nodo origen,
+        # el caso g(A,B,null,null) debemos buscar el mas corto entre instancias (todas vs todas)
+        if (temporal_precondition is not None, temporal_postcondition is not None) in [(False, True), (True, True)]:
+            instance_origin = self._get_first_instance_after_time(
+                node_origin,
+                time=temporal_precondition)
+            instance_target = self._get_last_instance_before_time(
+                node_target,
+                time_max=temporal_postcondition)
+            self.__logging(
+                verbose,
+                '{}Searching path from {} to {}'.format(tag, instance_origin, instance_target))
+
+            try:
+                # utilizar nx.all_shortest_paths con el parametro peso por defecto (None)
+                # para ignorar el peso de los enlaces
+                paths = nx.all_shortest_paths(
+                    self._graph,
+                    source=instance_origin,
+                    target=instance_target
+                )
+                shortest = min(paths, key=len)
+                self.__logging(
+                    verbose,
+                    '{}Path found: {}'.format(tag, shortest))
+                return len(shortest) -1
+            except nx.NetworkXNoPath as e:
+                return None
+        elif (temporal_precondition is not None) and (temporal_postcondition is None):
+            # La primera isntancia desde la temporal precondition,
+            # contra todas las instancias del nodo destino a ver qué onda:
+            origin_instance = self._get_first_instance_after_time(
+                node_origin,
+                time=temporal_precondition)
+            start_time = self._substract_position(origin_instance)
+            for target_instance_i in self._get_node_instances(node_target, from_time=start_time):
+                # a partir de las instancias posteriores al tiempo de la instancia origen:
+                self.__logging(
+                    verbose,
+                    '{}g(A,D,tX,null): Searching path from {} to {}'.format(
+                        tag, origin_instance, target_instance_i))
+                try:
+                    # buscar el path de la instancia origen a la destino
+                    paths = nx.all_shortest_paths(
+                        self._graph,
+                        source=origin_instance,
+                        target=target_instance_i
+                    )
+                    shorter = min(paths, key=len)
+                    # guardamos los caminos
+                    paths_found.append(shorter)
+                    self.__logging(
+                        verbose,
+                        '{}From {} to {}\nPath found: {}'.format(
+                            tag,
+                            origin_instance,
+                            target_instance_i,
+                            shorter))
+                    # seguimos buscando por si en nodos instancias posteriores tengo menos saltos
+                except nx.NetworkXNoPath as e:
+                    continue #  with the next node...
+
+            # paths_found --> puede estar en [] por si se envía una precondicion temporal
+            # para la cual no hay instancias destino para calcular caminos
+            if not paths_found: return None
+            shortest = min(paths_found, key=len)       
+            return len(shortest) -1
+        else:
+            self.__logging(
+                verbose,
+                '{}g(A,D,null,null)'.format(tag))
+            
+            for origin_instance_i in self._get_node_instances(node_origin):
+                start_time = self._substract_position(origin_instance_i)
+                for target_instance_i in self._get_node_instances(node_target, from_time=start_time):
+                    # a partir de las instancias posteriores al tiempo de la instancia origen:
+                    try:
+                        # buscar el path de la instancia origen a la destino
+                        paths = nx.all_shortest_paths(
+                            self._graph,
+                            source=origin_instance_i,
+                            target=target_instance_i
+                        )
+                        shorter = min(paths, key=len)
+                        # guardamos los caminos
+                        paths_found.append(shorter)
+                        self.__logging(
+                            verbose,
+                            '{}From {} to {}\nPath found: {}'.format(
+                                tag,
+                                origin_instance_i,
+                                target_instance_i,
+                                shorter))
+                        # seguimos buscando por si en nodos instancias posteriores tengo menos saltos
+                    except nx.NetworkXNoPath as e:
+                        continue #  with the next node...
+
+            shortest = min(paths_found, key=len)       
+            return len(shortest) -1
+
+    def average_geodesic_proximity(self, nodeX, nodeY, verbose=False):
+        '''It is a measure of on average, how many hops is X away from Y.'''
+        if nodeX == nodeY: return 0
+        geodesic_proximities = []
+        for time_i in self._get_node_participations(nodeX):
+            # G(A,D) = (g(A,D,t1,null) + g(A,D,t2,null) + g(A,D,t7,null)) / 3 = (3 + 2 + 1) / 3 = 2.
+            geoprox = self.geodesic_proximity(
+                nodeX,
+                nodeY,
+                time_i,
+                None,
+                verbose=verbose
+            )
+            if geoprox:
+                self.__logging(
+                    verbose,
+                    '>> average_geodesic_proximity:\nFrom {} to {} at time:{}, geodesic: {}'.format(
+                        nodeX,
+                        nodeY,
+                        time_i,
+                        geoprox))
+                geodesic_proximities.append(geoprox)
+            
+        return sum(geodesic_proximities) / (len(geodesic_proximities)) if geodesic_proximities else None
+
+    def _average_geodesic_proximity_on_node(self, node, mode='to'):
+        '''Retorna las proximidades geodesicas promedio para un nodo con respecto a los demas.
+        Segun del parametro especificado, se calcula desde o hasta el nodo.
+
+        Args:
+            node (str): Nodo hacia el cual calcular las proximidades geodesicas promedio.
+                Por ejemplo: 'A'
+
+            mode (str): Indica si las proximidades geodesicas promedios se calculan desde o hasta el nodo especificado
+                mode in ['from', 'to']
+
+        Returns:
+            dict: Diccionario con las proximidades geodesicas promedio desde/hasta el nodo recibido.
+
+                Por ejemplo, para 'A' se puede devolver:
+
+                {
+
+                    'A': 0.0,
+
+                    'B': 3.5,
+
+                    'C': 1,5,
+
+                    'D': 2.0,
+
+                    'E': 1.5
+
+                }
+        '''
+        if mode not in ['to', 'from']: raise Exception('Error mode not in ["in", "out"]')
+
+        avg_geodesic_proximities = {}
+        if mode == 'from':
+            avg_geo_proximity = functools.partial(self.average_geodesic_proximity, node)
+        else:
+            avg_geo_proximity = functools.partial(self.average_geodesic_proximity, nodeY=node)
+
+        for node_i in self._get_nodes():
+            avg_geodesic_proximities[node_i] = avg_geo_proximity(node_i)
+        return avg_geodesic_proximities
+   
+    def average_geodesic_proximity_to_node(self, node, G_in=False):
+        '''Retorna las proximidades geodesicas promedio del resto de los nodos del grafo hacia el nodo recibido.
+
+        Args:
+            node (str): Nodo hacia el cual calcular las proximidades geodesicas promedio.
+                Por ejemplo: 'A'
+
+        Returns:
+            dict: Diccionario con las proximidades geodesicas promedio hacia el nodo recibido.
+        '''
+        if not G_in:
+            return self._average_geodesic_proximity_on_node(node, mode='to')
+        else:
+            avg_geo_proxs_to_node = self._average_geodesic_proximity_on_node(
+                node,
+                mode='to'
+                ).copy()
+            avg_geoproxs = list(
+                filter(
+                    lambda proximity: proximity is not None,
+                    avg_geo_proxs_to_node.values()
+                    )
+                )
+            try:
+                # restar 1 a la len(***) para no contar la prox temp promedio hacia el propio nodo:
+                avg_geo_proxs_to_node['Gin'] = sum(avg_geoproxs) / (len(avg_geoproxs) - 1)
+            except ZeroDivisionError as e:
+                avg_geo_proxs_to_node['Gin'] = None
+            finally:
+                return avg_geo_proxs_to_node
+
+    def average_geodesic_proximity_from_node(self, node, G_out=False):
+        '''Retorna las proximidades geodesicas promedio desde el nodo recibido hacia resto de los nodos del grafo.
+
+        Args:
+            node (str): Nodo desde el cual calcular las proximidades geodesicas promedio.
+                Por ejemplo: 'A'
+
+        Returns:
+            dict: Diccionario con las proximidades geodesicas promedio desde el nodo recibido.
+        '''
+        if not G_out:
+            return self._average_geodesic_proximity_on_node(
+                node, mode='from')
+        else:
+            avg_geo_proxs_to_node = self._average_geodesic_proximity_on_node(
+                node,
+                mode='from'
+                ).copy()
+            avg_geoproxs = list(
+                filter(
+                    lambda proximity: proximity is not None,
+                    avg_geo_proxs_to_node.values()
+                    )
+                )
+            try:
+                # restar 1 a la len(***) para no contar la prox temp promedio hacia el propio nodo:
+                avg_geo_proxs_to_node['Gout'] = sum(avg_geoproxs) / (len(avg_geoproxs) - 1)
+            except ZeroDivisionError as e:
+                avg_geo_proxs_to_node['Gout'] = None
+            finally:
+                return avg_geo_proxs_to_node
+            
+
+    def average_geodesic_reach(self, node):
+        '''Lease  `Gout`'''
+        return self.average_geodesic_proximity_from_node(node, G_out=True).get('Gout')
+
+    def temporal_geodesic_table(self, formatear=None, conversor=None, verbose=False):
+        '''El objetivo del loop principal es crear una estructura como la siguiente:
+        {
+            'A': ['0.00', '-', '-', '-', '-', '-'],
+            'B': ['6.50', '0.00', '-', '5.33', '12.00', '7.94'],
+            'C': ['0.50', '2.50', '0.00', '-', '-', '1.50'],
+            'D': ['1.67', '4.33', '-', '0.00', '1.00', '2.33'],
+            'E': ['0.50', '-', '-', '-', '0.00', '0.50'],
+            'Pout': ['2.29', '3.42', '-', '5.33', '6.50', '-']
+        }
+        '''
+        tag = '>> temporal_geodesic_table:\n\t'
+        if not formatear:
+            formatear = lambda v: v
+        if not conversor:
+            conversor = lambda v: v
+
+        nodos = self._get_nodes()
+        table = {}
+        G_outs = []
+        for nodo in nodos:
+            # Para cada nodo:
+            # Primero calcular las proximidades temporales promedios contra los demas nodos:
+            self.__logging(
+                verbose,
+                '{}{}: {}'.format(
+                    tag,
+                    nodo,
+                    self.average_geodesic_proximity_to_node(
+                        nodo, G_in=True)))
+            table[nodo] = [formatear(conversor(proximity))
+                           for proximity
+                           in self.average_geodesic_proximity_to_node(nodo, G_in=True).values()]
+            
+            G_outs.append(
+                formatear(
+                    conversor(
+                        self.average_geodesic_reach(nodo))))
+
+        # un pequeño guion en la interseccion de Pin y Pout:
+        G_outs.append('-')
+        table['Gout'] = G_outs
+
+        # Usamos la lista de nodos como header, entonces agregamos Pin:
+        nodos.append('Gin')
+        return pd.DataFrame(table, index=nodos)
 
 
 ###################################################################################################################################
 ###################################################################################################################################
 ###################################################################################################################################
-# Module utils:
+def formatear(valor):
+    '''Formatea un flotante, si es None, retorna - (un guión)'''
+    if valor is None:
+        return '-'
+    return '{:.2f}'.format(valor)
 
+def seconds_to_days(seconds):
+    if seconds is None:
+        return None
+    return (seconds / 3600) / 24    
+
+
+def get_temporal_graph_kostakos():
+    times = [
+        (2018, 12, 31),
+        (2019, 1, 1),
+        (2019, 1, 3),
+        (2019, 1, 5),
+        (2019, 1, 9),
+        (2019, 1, 14),
+        (2019, 1, 20)
+    ]
+    data = pd.DataFrame(
+        {
+            'sender': ['A', 'A', 'E', 'B', 'B', 'D', 'A'],
+            'recipient': ['B', 'C, E', 'D', 'C', 'D', 'B', 'D'],
+            'time': [ datetime.datetime(Y, m, d) for (Y, m, d) in times]
+        })
+
+    tg = TemporalGraph(data.time)
+    tg.build_links_from_data(data=data)
+    return tg
+
+
+
+# Module utils: (deprecated)
 def __create_alphabet(num):
     '''Crea y retorna el alfabeto para representar con letras tanta cantidad de elementos como lo indique ``num``
 
@@ -1133,3 +1536,4 @@ def limpiar_data(df, col_sender, col_recipient, col_time, formato_fecha=FORMATO_
         'recipient': df[col_recipient].apply(lambda receptor: reemplazos[receptor]),
         'time': df[col_time].apply(lambda fecha: datetime.datetime.strptime(fecha, formato_fecha)),
     })
+
