@@ -13,7 +13,7 @@ data/test__*
 # output:
 output/img*
 
-# test crudos:
+# notebooks tests crudos:
 *_raw*
 
 

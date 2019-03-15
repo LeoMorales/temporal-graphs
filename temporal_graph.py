@@ -101,6 +101,12 @@ class TemporalGraph:
         self._step = 0
         self._node_labels = {}
 
+    def size(self):
+        return self._graph.size()
+
+    def count(self):
+        return len(self._graph.nodes())
+
     def _get_node_number(self, time, silent_fail=True):
         '''Retorna el numero de columna a la que corresponde el tiempo recibido (visualmente).
 
@@ -1084,6 +1090,8 @@ class TemporalGraph:
         if format_times:
             data_cleaned['time'] = df[col_time].apply(
                 lambda fecha: datetime.datetime.strptime(fecha, formato_fecha))
+        else:
+            data_cleaned['time'] = df[col_time]
 
         if col_label:
             data_cleaned['label'] = df[col_label]            
@@ -1109,12 +1117,12 @@ class TemporalGraph:
     def clean_and_build_links_data(
         self, data,
         col_sender, col_recipient, col_time,
-        col_label=None, verbose=False):
+        col_label=None, verbose=False, clean_time=False):
         ''' Limpiar y crear enlaces
         '''
         self.build_links_from_data(
             self._clean_data(
-                data, col_sender, col_recipient, col_time, col_label=col_label),
+                data, col_sender, col_recipient, col_time, col_label=col_label, format_times=clean_time),
             col_label='label',
             verbose=verbose)
 
@@ -1510,10 +1518,10 @@ class TemporalGraph:
         # un pequeño guion en la interseccion de Pin y Pout:
         # mejor None, para mantener el tipo del df homogéneo:
         G_outs.append(None)
-        table['Gout'] = G_outs
+        table['Vout'] = G_outs
 
         # Usamos la lista de nodos como header, entonces agregamos Pin:
-        nodos.append('Gin')
+        nodos.append('Vin')
         return pd.DataFrame(table, index=nodos)
 
 
@@ -1529,10 +1537,10 @@ def formatear(valor):
 def seconds_to_days(seconds):
     if seconds is None:
         return None
-    return (seconds / 3600) / 24    
+    return (seconds / 3600.0) / 24.0    
 
 
-def get_temporal_graph_kostakos():
+def get_temporal_graph_kostakos(verbose=False):
     times = [
         (2018, 12, 31),
         (2019, 1, 1),
@@ -1550,7 +1558,7 @@ def get_temporal_graph_kostakos():
         })
 
     tg = TemporalGraph(data.time)
-    tg.build_links_from_data(data=data)
+    tg.build_links_from_data(data=data, verbose=verbose)
     return tg
 
 
