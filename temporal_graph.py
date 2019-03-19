@@ -498,7 +498,39 @@ class TemporalGraph:
 
         return work_graph
 
-    def _build_links(self, data_row,
+    def build_a_link(self, sender, destination, time, verbose=False):
+        '''Crea enlaces en el grafo temporal según la data recibida.
+        Inicialmente se penso esta funcion para ser aplicada a un Dataframe con `apply`
+
+        Args:
+            sender (str): Emisor del evento.
+                Puede contener múltiples emisores separados por coma.
+
+            destination (str): Receptor del evento.
+                Puede contener múltiples receptores separados por coma.
+
+            time (str): Tiempo en el que se produce la interacción.
+
+        '''
+        for origin in sender.split(','):
+            origin = origin.strip()
+            for destination in destination.split(','):
+                destination = destination.strip()
+                try:
+                    # Cuando pandas lee una fecha en un csv, las interpreta con su
+                    # propio tipo de datos, que podemos convertir a datetime.datetime
+                    # de python con el metodo to_pydatetime:
+                    time = time.to_pydatetime()
+                except:
+                    raise Exception(
+                        'El atributo no se puede convertir a datetime.datetime')
+                origin, destination, time, instance_origin = self.create_link(
+                    origin, destination, time)
+                if verbose:
+                    print('Enlace: ', origin, destination,
+                          data_row[column_time], instance_origin)
+
+    def build_links(self, data_row,
                      column_sender,
                      column_destination,
                      column_time,
@@ -506,6 +538,7 @@ class TemporalGraph:
                      verbose=True,
                      save_steps_images=False):
         '''Crea enlaces en el grafo temporal según la data recibida.
+        Inicialmente se penso esta funcion para ser aplicada a un Dataframe con `apply`
 
         Args:
             data_row (pandas.core.series.Series): Informacion de el o los enlaces
@@ -583,7 +616,7 @@ class TemporalGraph:
         # Ordenar por tiempos:
         data = data.sort_values(by=[col_time])
         build_link = functools.partial(
-            self._build_links,
+            self.build_links,
             column_sender=col_sender,
             column_destination=col_destination,
             column_time=col_time,
