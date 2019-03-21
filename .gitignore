@@ -19,3 +19,6 @@ output/img*
 
 # temp:
 data/.~*
+
+# ignore los pickles:
+*.pkl
