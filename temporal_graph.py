@@ -849,13 +849,14 @@ class TemporalGraph:
 
         Returns:
             float: En promedio, cuánto tiempo toma ir desde X hasta Y.
+                None si es imposible calcular.
         '''
         if not self._node_in_graph(node_from):
-            print('Node from not in graph')
-            return
+            self.__logging(verbose, 'Node from not in graph')
+            return None
         if not self._node_in_graph(node_to):
-            print('Node to not in graph')
-            return
+            self.__logging(verbose,'Node to not in graph')
+            return None
 
         self.__logging(
             verbose,
