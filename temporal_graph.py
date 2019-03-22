@@ -1495,7 +1495,7 @@ class TemporalGraph:
                 geodesic_distances
                 )
             )
-        return len(not_null_geodesic_distances) / n
+        return len(not_null_geodesic_distances) / n if n else None
 
     def temporal_availability_from_node(self, nodeX, Vout=True):
         temporal_availability_to = {}
@@ -1505,7 +1505,9 @@ class TemporalGraph:
 
         if Vout:
             # no se deben contar en el calculo la disponibilidad temporal hacia el propio nodo:
-            temporal_availability_to['Vout'] = (sum(temporal_availability_to.values()) -1) / (len(graph_nodes) -1)
+            temporal_availability_to['Vout'] = (sum(
+                [value for value in temporal_availability_to.values() if value is not None]) -1) / (len(graph_nodes) -1)
+            temporal_availability_to['Vout'] = None if temporal_availability_to['Vout'] < 0 else temporal_availability_to['Vout']
 
         return temporal_availability_to
 
