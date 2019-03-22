@@ -1427,6 +1427,11 @@ class TemporalGraph:
         '''Lease  `Gout`'''
         return self.average_geodesic_proximity_from_node(node, G_out=True).get('Gout')
 
+    def average_geodesic_reachability(self, node):
+        '''Lease  `Gout`'''
+        return self.average_geodesic_proximity_to_node(node, G_in=True).get('Gin')
+
+
     def temporal_geodesic_table(self, formatear=None, conversor=None, verbose=False):
         '''El objetivo del loop principal es crear una estructura como la siguiente:
         {
