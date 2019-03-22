@@ -1516,9 +1516,13 @@ class TemporalGraph:
 
         return temporal_availability_from
 
-    def average_geodesic_reach(self, node):
+    def average_availability_reach(self, node):
         '''Lease  `Vout`'''
         return self.temporal_availability_from_node(node, Vout=True).get('Vout')
+
+    def average_availability_reachability(self, node):
+        '''Lease  `Vin`'''
+        return self.temporal_availability_to_node(node, Vin=True).get('Vin')
 
     def temporal_availability_table(self, formatear=None, conversor=None, verbose=False):
         tag = '>> temporal_availability_table:\n'
@@ -1547,7 +1551,7 @@ class TemporalGraph:
             G_outs.append(
                 formatear(
                     conversor(
-                        self.average_geodesic_reach(nodo))))
+                        self.average_availability_reach(nodo))))
 
         # un pequeño guion en la interseccion de Pin y Pout:
         # mejor None, para mantener el tipo del df homogéneo:
