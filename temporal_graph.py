@@ -221,7 +221,12 @@ class TemporalGraph:
             elif time < last_time_appearance:
                 # debemos dividir el link que ya existía, porque
                 # nos enviaron un nodo que va en el medio
-                print('reacomodar links horizontales emisor')
+                print(
+                    '{} --> {} at {}: {}'.format(
+                        sender,
+                        receiver,
+                        time,
+                        'reacomodar links horizontales emisor'))
 
         # receiver:
         last_time_appearance = self._last_node_appearance.get(receiver, None)
