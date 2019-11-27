@@ -22,3 +22,6 @@ data/.~*
 
 # ignore los pickles:
 *.pkl
+
+# ignore los scripts:
+scripts/*
